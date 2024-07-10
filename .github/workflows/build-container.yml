@@ -2,11 +2,6 @@
 # yamllint disable rule:line-length
 name: "CI"
 on:  # yamllint disable rule:truthy
-  push:
-    tags:
-      - '*'
-    branches:
-      - '*'
   pull_request:
     branches:
       - devel
