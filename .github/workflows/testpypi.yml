@@ -1,0 +1,37 @@
+# Publish python package at https://test.pypi.org/p/ceph-nvmeof
+# This is for dev releases, and will be pushed to test pypi on all merges to "devel" branch.
+name: Upload release to Test PyPI
+on:
+  push:
+    tags:
+      - '*'
+    branches:
+      - 'devel'
+
+jobs:
+  pypi-publish:
+    name: Upload release to Test PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/ceph-nvmeof
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pdm-project/setup-pdm@v3
+        with:
+          python-version: 3.9
+          version: "2.7.4"
+      - name: Sync Dependencies 
+        run: pdm sync -v --no-isolation --no-self --no-editable
+      - name: Compile Protocol Buffers
+        run: pdm run protoc
+      - name: Set current date as env variable
+        run: echo "NOW=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
+      - name: Set dev version number
+        run: |
+          NEW_VERSION="$(pdm show --version).dev$NOW"
+          sed -i "s/^version = \".*\"/version = \"${NEW_VERSION}\"/" pyproject.toml
+      - name: Publish package distributions to Test PyPI
+        run: pdm publish -r testpypi
