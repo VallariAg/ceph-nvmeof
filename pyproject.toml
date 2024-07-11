@@ -32,6 +32,7 @@ dependencies = [
 ]
 
 [tool.pdm.scripts]
+_.env_file = ".env"
 protoc = {call = "grpc_tools.command:build_package_protos('.')"}
 pre_build = {composite = ["protoc"]}
 

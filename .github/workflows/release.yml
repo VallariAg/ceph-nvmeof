@@ -1,5 +1,6 @@
 # Publish Update python package at https://pypi.org/project/ceph-nvmeof/
 # This is official release, and will be pushed to pypi when a new tag is pushed in repo.
+# Usage: pip install ceph-nvmeof==1.2.15
 name: Upload release to PyPI
 on:
   push:
