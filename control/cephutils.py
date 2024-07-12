@@ -109,7 +109,7 @@ class CephUtils:
                     "daemon_prefix": "cat", 
                 } 
                 daemon_name = daemon_name or "dameon_name"
-                cluster.service_daemon_register("nvmeof", daemon_name, metadata)
+                cluster.service_daemon_register("tcmu-runner", daemon_name, metadata)
                 self.logger.info("vallari's service registered!")
                 cluster.service_daemon_update({"status": "running", "is": "created"})
                 self.logger.info("vallari's service status updated!")
