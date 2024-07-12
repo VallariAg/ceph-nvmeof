@@ -110,6 +110,9 @@ class CephUtils:
                 } 
                 daemon_name = daemon_name or "dameon_name"
                 cluster.service_daemon_register("nvmeof", daemon_name, metadata)
+                self.logger.info("vallari's service registered!")
+                cluster.service_daemon_update({"status": "running", "is": "created"})
+                self.logger.info("vallari's service status updated!")
         except Exception:
             self.logger.exception(f"Can't register daemon {daemon_name} to service_map!")
 
