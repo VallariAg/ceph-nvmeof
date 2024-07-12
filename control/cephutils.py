@@ -108,6 +108,7 @@ class CephUtils:
                     "daemon_type": "gateways", # for ceph -s: rgw: 3 <daemon_type> active (3 hosts)
                     "daemon_prefix": "cat", 
                 } 
+                daemon_name = daemon_name or "dameon_name"
                 cluster.service_daemon_register("nvmeof", daemon_name, metadata)
         except Exception:
             self.logger.exception(f"Can't register daemon {daemon_name} to service_map!")
