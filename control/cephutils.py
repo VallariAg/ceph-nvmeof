@@ -100,7 +100,12 @@ class CephUtils:
     def service_daemon_register(self, daemon_name, pool_name):
         try:
             with rados.Rados(conffile=self.ceph_conf, rados_id=self.rados_id) as cluster:
+                if daemon_name:
+                    daemon_name = daemon_name[14:]
+                else:
+                    daemon_name = "dameon_name"
                 metadata = {
+                    "id": daemon_name or "dog",
                     "pool_name": pool_name,
                     # "image_name": image_name,
                     # "image_id": image_id,
@@ -108,13 +113,27 @@ class CephUtils:
                     "daemon_type": "gateways", # for ceph -s: rgw: 3 <daemon_type> active (3 hosts)
                     "daemon_prefix": "cat", 
                 } 
-                daemon_name = daemon_name or "dameon_name"
-                cluster.service_daemon_register("tcmu-runner", daemon_name, metadata)
+                self.logger.info(metadata)
+                r = cluster.service_daemon_register("nvmeof", daemon_name, metadata)
+                self.logger.info(r)
                 self.logger.info("vallari's service registered!")
-                cluster.service_daemon_update({"status": "running", "is": "created"})
+                r = cluster.service_daemon_update({"status": "running", "is": "created_doggie"})
+                self.logger.info(r)
                 self.logger.info("vallari's service status updated!")
         except Exception:
             self.logger.exception(f"Can't register daemon {daemon_name} to service_map!")
+
+    def service_daemon_update(self, status):
+        try:
+            with rados.Rados(conffile=self.ceph_conf, rados_id=self.rados_id) as cluster:
+                status_buffer = {
+                   "status": status, "is": "running_doggie" 
+                } 
+                r = cluster.service_daemon_update(status_buffer)
+                self.logger.info(r)
+                self.logger.info("vallari's service_daemon_update service status updated!")
+        except Exception:
+            self.logger.exception(f"service_daemon_update: Can't update register daemon to service_map!") 
 
 
     def create_image(self, pool_name, image_name, size) -> bool:
