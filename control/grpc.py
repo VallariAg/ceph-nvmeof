@@ -145,12 +145,12 @@ class GatewayService(pb2_grpc.GatewayServicer):
         self.subsys_ha = {}
         self.subsys_max_ns = {}
         
-        pool = self.gateway_pool
-        daemon_name = self.config.get("gateway", "name")
-        self.logger.info("[Vallari's test] pool--------------: " + pool)
-        self.logger.info("[Vallari's test] daemon_name--------------: " + daemon_name)
-        self.logger.info("[Vallari's test] self.gateway_group--------------: " + self.gateway_group)
-        self.ceph_utils.service_daemon_register(daemon_name, pool)
+        # pool = self.gateway_pool
+        # daemon_name = self.config.get("gateway", "name")
+        # self.logger.info("[Vallari's test] pool--------------: " + pool)
+        # self.logger.info("[Vallari's test] daemon_name--------------: " + daemon_name)
+        # self.logger.info("[Vallari's test] self.gateway_group--------------: " + self.gateway_group)
+        # self.ceph_utils.service_daemon_register(daemon_name, pool)
 
 
     def is_valid_host_nqn(nqn):

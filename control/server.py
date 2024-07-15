@@ -200,6 +200,13 @@ class GatewayServer:
         else:
             self.logger.info(f"Prometheus endpoint is disabled. To enable, set the config option 'enable_prometheus_exporter = True'")
 
+        pool = self.config.get("ceph", "pool")
+        daemon_name = self.name
+        self.logger.info("[Vallari's test] pool--------------: " + pool)
+        self.logger.info("[Vallari's test] daemon_name--------------: " + daemon_name)
+        self.logger.info("[Vallari's test] self.gateway_group--------------: " + self.config.get_with_default("gateway", "group", ""))
+        self.ceph_utils.service_daemon_register(daemon_name, pool) 
+
     def _monitor_client_version(self) -> str:
         """Return monitor client version string."""
         # Get the current SIGCHLD handler
