@@ -100,6 +100,9 @@ class CephUtils:
     def service_daemon_register(self, daemon_name, pool_name):
         try:
             with rados.Rados(conffile=self.ceph_conf, rados_id=self.rados_id) as cluster:
+                self.logger.info("Vallari's cluster state: " + cluster.state)
+                cluster.connect()
+                self.logger.info("Vallari's cluster state: " + cluster.state)
                 if daemon_name:
                     daemon_name = daemon_name[14:]
                 else:
