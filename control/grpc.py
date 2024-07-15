@@ -144,6 +144,10 @@ class GatewayService(pb2_grpc.GatewayServicer):
         self._init_cluster_context()
         self.subsys_ha = {}
         self.subsys_max_ns = {}
+        
+        pool = self.gateway_pool
+        daemon_name = self.config.get("gateway", "name")
+        self.ceph_utils.service_daemon_register(daemon_name, pool)
 
     def is_valid_host_nqn(nqn):
         if nqn == "*":
@@ -446,6 +450,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
         return pb2.req_status(status=0, error_message=os.strerror(0))
 
     def subsystem_already_exists(self, context, nqn) -> bool:
+        for i in range(10):
+            self.ceph_utils.service_daemon_update(f"running{i}")
         if not context:
             return False
         state = self.gateway_state.local.get_state()
@@ -461,6 +467,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 self.logger.exception(f"Got exception while parsing {val}, will continue")
                 continue
         return False
+    
 
     def serial_number_already_used(self, context, serial) -> str:
         if not context:
@@ -1269,6 +1276,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
 
     def list_namespaces(self, request, context=None):
         """List namespaces."""
+
+        for i in range(10):
+            self.ceph_utils.service_daemon_update(f"listing_namespaces{i}")
 
         peer_msg = self.get_peer_message(context)
         if request.nsid == None or request.nsid == 0:

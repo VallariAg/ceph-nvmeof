@@ -96,6 +96,36 @@ class CephUtils:
 
         return False
 
+    def service_daemon_register(self, daemon_name, pool_name):
+        try:
+            with rados.Rados(conffile=self.ceph_conf, rados_id=self.rados_id) as cluster:
+                if daemon_name: #Example "client.nvmeof.mypool.singleESXiS1.kvmnfj"
+                    daemon_name = daemon_name[14:] # becomes "mypool.singleESXiS1.kvmnfj"
+                else:
+                    daemon_name = "dameon_name"
+                metadata = {
+                    "id": daemon_name,
+                    "pool_name": pool_name,
+                    "daemon_type": "gateways", # for ceph -s: nvmeof: 3 <daemon_type> active
+                    "daemon_prefix": "host1", # not needed afaik
+                } 
+                self.logger.info(metadata)
+                r = cluster.service_daemon_register("nvmeof", daemon_name, metadata)
+                r = cluster.service_daemon_update({"status": "created"})
+        except Exception:
+            self.logger.exception(f"Can't register daemon {daemon_name} to service_map!")
+
+    def service_daemon_update(self, status):
+        try:
+            with rados.Rados(conffile=self.ceph_conf, rados_id=self.rados_id) as cluster:
+                status_buffer = {
+                   "status": status,
+                } 
+                r = cluster.service_daemon_update(status_buffer)
+                self.logger.info(r)
+        except Exception:
+            self.logger.exception(f"service_daemon_update: Can't update register daemon to service_map!") 
+
     def create_image(self, pool_name, image_name, size) -> bool:
         # Check for pool existence in advance as we don't create it if it's not there
         if not self.pool_exists(pool_name):
