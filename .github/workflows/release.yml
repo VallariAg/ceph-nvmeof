@@ -35,10 +35,15 @@ on:
           - dev 
           - prod
           - dev-debug-version
+      ref:
+        description: 'Build using this branch, tag or SHA'
+        required: false
+        type: string
 
 env:
   DEFAULT_PYTHON: ${{ inputs.python_version || '3.9' }}
   DEFAULT_PDM: ${{ inputs.pdm_version || '2.7.4' }}
+  REF: ${{ inputs.ref || 'devel' }} 
 
 jobs:
   pypi-publish:
@@ -48,18 +53,22 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{env.REF}} 
       - uses: pdm-project/setup-pdm@v3
         with:
           python-version: ${{env.DEFAULT_PYTHON}}
           version: ${{env.DEFAULT_PDM}}
+      
       - name: Sync Dependencies 
         run: pdm sync -v --no-isolation --no-self --no-editable
       - name: Compile Protocol Buffers
         run: pdm run protoc
+      
       - name: Set current date as env variable
         run: echo "NOW=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
       - name: (DEBUG) Set dev version number
-        # Pushes a debug-release to testpypi with "<current_release>dev<timestamp>" version (eg 1.2.15.dev20240710183756)
+        # For debug-release, set version "<current_release>dev<timestamp>" (eg 1.2.15.dev20240710183756)
         # (to avoid messing current releases versions like 1.2.15).
         run: |
           NEW_VERSION="$(pdm show --version).dev$NOW"
@@ -67,9 +76,11 @@ jobs:
         if: (inputs.pypi_env && inputs.pypi_env == 'dev-debug-version')
       - name: Build package
         run: pdm build --config-setting="--build-number=$NOW" --no-sdist
+
       - name: Publish package distributions to PyPI
         run: pdm publish --no-build
         if: ( github.event_name == 'release' && github.event.action == 'published' ) || (github.event_name == 'workflow_dispatch' && inputs.pypi_env == 'prod') 
+
       - name: Publish package distributions to Test PyPI
         run: pdm publish --no-build -r testpypi
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.pypi_env == 'dev' || inputs.pypi_env == 'dev-debug-version'))
