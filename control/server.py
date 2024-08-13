@@ -11,6 +11,7 @@ import os
 import shlex
 import signal
 import socket
+import rados
 import subprocess
 import grpc
 import json
@@ -127,6 +128,9 @@ class GatewayServer:
             logger.info("Exiting the gateway process.")
         gw_logger.compress_final_log_file(gw_name)
 
+        if self.status_conn: 
+            self.status_conn.shutdown()
+
     def set_group_id(self, id: int):
         self.logger.info(f"Gateway {self.name} group {id=}")
         assert id >= 0
@@ -197,6 +201,21 @@ class GatewayServer:
             log_level = log_level.upper()
             log_req = pb2.set_spdk_nvmf_logs_req(log_level=log_level, print_level=log_level)
             self.gateway_rpc.set_spdk_nvmf_logs(log_req)
+        
+        self._register_service_map()
+
+    def _register_service_map(self):
+        # show gateway in "ceph status" output
+        ceph_conf = self.config.get("ceph", "config_file")
+        rados_id = self.config.get_with_default("ceph", "id", "")
+        self.status_conn = rados.Rados(conffile=ceph_conf, rados_id=rados_id)
+        self.status_conn.connect()
+        metadata = {
+            "id": self.name,
+            "pool_name": self.config.get("ceph", "pool"),
+            "daemon_type": "gateway", # "nvmeof: 3 <daemon_type> active (3 hosts)"
+        } 
+        self.ceph_utils.service_daemon_register(self.status_conn, metadata) 
 
     def _monitor_client_version(self) -> str:
         """Return monitor client version string."""
