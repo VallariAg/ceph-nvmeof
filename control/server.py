@@ -11,6 +11,7 @@ import os
 import shlex
 import signal
 import socket
+import rados
 import subprocess
 import grpc
 import json
@@ -197,6 +198,18 @@ class GatewayServer:
             log_level = log_level.upper()
             log_req = pb2.set_spdk_nvmf_logs_req(log_level=log_level, print_level=log_level)
             self.gateway_rpc.set_spdk_nvmf_logs(log_req)
+        
+        pool = self.config.get("ceph", "pool")
+        ceph_conf = self.config.get("ceph", "config_file")
+        rados_id = self.config.get_with_default("ceph", "id", "")
+        conn = rados.Rados(conffile=ceph_conf, rados_id=rados_id)
+        conn.connect()
+        self.status_conn = conn
+        daemon_name = self.name
+        self.logger.info("[Vallari's test] pool--------------: " + pool)
+        self.logger.info("[Vallari's test] daemon_name--------------: " + daemon_name)
+        self.logger.info("[Vallari's test] self.gateway_group--------------: " + self.config.get_with_default("gateway", "group", ""))
+        self.ceph_utils.service_daemon_register(self.status_conn, daemon_name, pool) 
 
     def _monitor_client_version(self) -> str:
         """Return monitor client version string."""

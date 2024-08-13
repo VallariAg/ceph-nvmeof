@@ -96,6 +96,55 @@ class CephUtils:
 
         return False
 
+    # def service_daemon_register(self, pool_name, image_name, image_id, ):
+    def service_daemon_register(self, cluster, daemon_name, pool_name):
+        try:
+            if cluster: #rados client
+            # with rados.Rados(conffile=self.ceph_conf, rados_id=self.rados_id) as cluster:
+                self.logger.info("Vallari's cluster state: " + cluster.state)
+                # cluster.connect()
+                # self.logger.info("Vallari's cluster state: " + cluster.state)
+                if daemon_name:
+                    daemon_name = daemon_name[14:]
+                else:
+                    daemon_name = "dameon_name"
+                metadata = {
+                    "id": daemon_name or "dog",
+                    "pool_name": pool_name,
+                    # "image_name": image_name,
+                    # "image_id": image_id,
+                    # "hostname": [],
+                    "daemon_type": "gateways", # for ceph -s: rgw: 3 <daemon_type> active (3 hosts)
+                    "daemon_prefix": "cat", 
+                } 
+                self.logger.info(metadata)
+                r = cluster.service_daemon_register("nvmeof", daemon_name, metadata)
+                self.logger.info(r)
+                self.logger.info("vallari's service registered!")
+                r = cluster.service_daemon_update({"status": "running", "is": "created_doggie"})
+                self.logger.info(r)
+                self.logger.info("vallari's service status updated!")
+            else:
+                self.logger.info("vallari's cluster missing!")
+        except Exception:
+            self.logger.exception(f"Can't register daemon {daemon_name} to service_map!")
+
+    def service_daemon_update(self, cluster, status):
+        try:
+            if cluster:
+            # with rados.Rados(conffile=self.ceph_conf, rados_id=self.rados_id) as cluster:
+                status_buffer = {
+                   "status": status, "is": "running_doggie" 
+                } 
+                r = cluster.service_daemon_update(status_buffer)
+                self.logger.info(r)
+                self.logger.info("vallari's service_daemon_update service status updated!")
+            else:
+                self.logger.info("vallari's cluster missing!") 
+        except Exception:
+            self.logger.exception(f"service_daemon_update: Can't update register daemon to service_map!") 
+
+
     def create_image(self, pool_name, image_name, size) -> bool:
         # Check for pool existence in advance as we don't create it if it's not there
         if not self.pool_exists(pool_name):
