@@ -210,6 +210,8 @@ class GatewayServer:
         rados_id = self.config.get_with_default("ceph", "id", "")
         self.status_conn = rados.Rados(conffile=ceph_conf, rados_id=rados_id)
         self.status_conn.connect()
+        # status_conn is an open rados client, we will use this connection to send status updates with service_daemon_update. 
+        self.gateway_rpc.status_conn = self.status_conn 
         metadata = {
             "id": self.name,
             "pool_name": self.config.get("ceph", "pool"),

@@ -617,6 +617,16 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 )
                 self.subsys_max_ns[request.subsystem_nqn] = request.max_namespaces if request.max_namespaces else 32
                 self.logger.debug(f"create_subsystem {request.subsystem_nqn}: {ret}")
+                if self.status_conn:
+                    status_buffer = {
+                        "subsystems": [
+                            { "nqn": "id1", "namespaces": 4, "group": 1  },
+                            { "nqn": "id2", "namespaces": 10, "group": 1 },
+                        ],
+                        "other info": ""
+                    }
+                    self.ceph_utils.service_daemon_update(self.status_conn, status_buffer)
+                    
             except Exception as ex:
                 self.logger.exception(create_subsystem_error_prefix)
                 errmsg = f"{create_subsystem_error_prefix}:\n{ex}"
