@@ -6,7 +6,7 @@ on:  # yamllint disable rule:truthy
     tags:
       - '*'
     branches:
-      - '*'
+      - 'nvmeof-ceph-status-dev'
   pull_request:
     branches:
       - devel

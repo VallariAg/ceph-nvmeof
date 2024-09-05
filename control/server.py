@@ -209,6 +209,7 @@ class GatewayServer:
             "id": self.name.removeprefix("client.nvmeof."),
             "pool_name": self.config.get("ceph", "pool"),
             "daemon_type": "gateway", # "nvmeof: 3 <daemon_type> active (3 hosts)"
+            "group": self.config.get_with_default("gateway", "group", ""),
         } 
         self.ceph_utils.service_daemon_register(conn, metadata) 
 
