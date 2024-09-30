@@ -37,8 +37,10 @@ sudo ./cephadm shell ceph orch device ls
 sudo ./cephadm shell ceph orch device ls --refresh
 sleep 200
 sudo ./cephadm shell ceph orch device ls 
-sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/sdb1 --force
-sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/sda1 --force
+DEVICE=$(lsblk | grep "mnt" | awk '{print $1}' | cut -c3-5)
+sudo ./cephadm shell ceph-volume lvm zap --destroy /dev/$DEVICE
+# sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/sdb1 --force
+# sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/sda1 --force
 sleep 20
 sudo ./cephadm shell ceph orch apply osd --all-available-devices
 sleep 20
