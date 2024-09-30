@@ -27,18 +27,22 @@ sudo ./cephadm --image quay.ceph.io/ceph-ci/ceph:$CEPH_SHA bootstrap \
     --mon-ip $IP_ADDRESS \
     --allow-mismatched-release
 
-sleep 30
+sleep 100
 
 # setup cluster
-echo "printing devices -------- "
-sudo ./cephadm shell ceph orch device ls 
-echo "prinitnig lsblk ======"
+sudo ./cephadm shell ceph-volume inventory
 lsblk
-# sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/nvme0n1 --force
-# sleep 20
-# sudo ./cephadm shell ceph orch apply osd --all-available-devices
-# sleep 20
-# sudo ./cephadm shell ceph orch device ls
+ls -l /dev
+sudo ./cephadm shell ceph orch device ls 
+sudo ./cephadm shell ceph orch device ls --refresh
+sleep 200
+sudo ./cephadm shell ceph orch device ls 
+sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/sdb1 --force
+sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/sda1 --force
+sleep 20
+sudo ./cephadm shell ceph orch apply osd --all-available-devices
+sleep 20
+sudo ./cephadm shell ceph orch device ls
 # sudo ./cephadm shell ceph config set global log_to_file true
 # sudo ./cephadm shell ceph config set global mon_cluster_log_to_file true
 
