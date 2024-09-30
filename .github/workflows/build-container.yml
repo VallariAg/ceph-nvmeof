@@ -884,6 +884,40 @@ jobs:
           name: atom-artifact
           path: /tmp/artifact/*
 
+  teuthology:
+    needs: [build, build-ceph]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download container images
+        uses: actions/download-artifact@v4
+        with:
+          pattern: container_images_nvmeof
+          merge-multiple: true
+
+      - name: Load container images
+        run: |
+          docker load < nvmeof.tar
+          docker load < nvmeof-cli.tar
+
+      - name: Cluster setup with cephadm
+        if: always() || failure()
+        run: |
+          . .env
+          ./tests/teuthology/clusterSetup.sh $NVMEOF_VERSION $CEPH_SHA
+
+      # - name: Atom artifact build
+      #   if: always()
+      #   run: ./tests/teuthology/runTests.sh
+
+      # - uses: actions/upload-artifact@v4
+      #   if: always()
+      #   with:
+      #     name: atom-artifact
+      #     path: /tmp/artifact/*
+
   push-images-to-ceph-registry:
     if: github.event_name == 'release'
     needs: [pytest, demo, demo-secure, discovery, ha, atom, build-arm64]
