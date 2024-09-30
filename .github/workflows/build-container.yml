@@ -885,22 +885,22 @@ jobs:
           path: /tmp/artifact/*
 
   teuthology:
-    needs: [build, build-ceph]
+    # needs: [build, build-ceph]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download container images
-        uses: actions/download-artifact@v4
-        with:
-          pattern: container_images_nvmeof
-          merge-multiple: true
+      # - name: Download container images
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     pattern: container_images_nvmeof
+      #     merge-multiple: true
 
-      - name: Load container images
-        run: |
-          docker load < nvmeof.tar
-          docker load < nvmeof-cli.tar
+      # - name: Load container images
+      #   run: |
+      #     docker load < nvmeof.tar
+      #     docker load < nvmeof-cli.tar
 
       - name: Cluster setup with cephadm
         if: always() || failure()

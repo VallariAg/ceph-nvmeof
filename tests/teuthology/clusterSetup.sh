@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -xe
+
 NVMEOF_VERSION=$1
 if [ "$2" = "latest" ]; then
     CEPH_SHA=$(curl -s https://shaman.ceph.com/api/repos/ceph/main/latest/centos/9/ | jq -r ".[] | select(.archs[] == \"$(uname -m)\" and .status == \"ready\") | .sha1")
@@ -7,18 +9,20 @@ else
     CEPH_SHA=$2
 fi
 
-IP_ADDRESS=$(hostname -I)
+IP_ADDRESS=$(hostname -I | awk '{print $2}')
 HOSTNAME=$(hostname)
 
 # install cephadm
-mkdir /cephadm
-cd /cephadm
+# mkdir /cephadm
+# cd /cephadm
 curl --silent --remote-name --location https://download.ceph.com/rpm-18.2.2/el9/noarch/cephadm
 chmod +x cephadm
 
+echo $CEPH_SHA
+echo $IP_ADDRESS
+
 # bootstrap ceph cluster
-sudo ./cephadm --image quay.ceph.io/ceph-ci/ceph:$CEPH_SHA \
-    bootstrap \
+sudo ./cephadm --image quay.ceph.io/ceph-ci/ceph:$CEPH_SHA bootstrap \
     --single-host-defaults \
     --mon-ip $IP_ADDRESS \
     --allow-mismatched-release
@@ -26,29 +30,32 @@ sudo ./cephadm --image quay.ceph.io/ceph-ci/ceph:$CEPH_SHA \
 sleep 30
 
 # setup cluster
+echo "printing devices -------- "
 sudo ./cephadm shell ceph orch device ls 
-sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/nvme0n1 --force
-sleep 20
-sudo ./cephadm shell ceph orch apply osd --all-available-devices
-sleep 20
-sudo ./cephadm shell ceph orch device ls
-sudo ./cephadm shell ceph config set global log_to_file true
-sudo ./cephadm shell ceph config set global mon_cluster_log_to_file true
+echo "prinitnig lsblk ======"
+lsblk
+# sudo ./cephadm shell ceph orch device zap $HOSTNAME /dev/nvme0n1 --force
+# sleep 20
+# sudo ./cephadm shell ceph orch apply osd --all-available-devices
+# sleep 20
+# sudo ./cephadm shell ceph orch device ls
+# sudo ./cephadm shell ceph config set global log_to_file true
+# sudo ./cephadm shell ceph config set global mon_cluster_log_to_file true
 
 
-# setup nvmeof
-sudo ./cephadm shell ceph -s
-sudo ./cephadm shell ceph config set mgr mgr/cephadm/container_image_nvmeof quay.io/ceph/nvmeof:latest
-sudo ./cephadm shell ceph config get mgr mgr/cephadm/container_image_nvmeof
-sudo ./cephadm shell ceph osd pool create mypool
-sudo ./cephadm shell rbd pool init -p mypool
-sudo ./cephadm shell ceph orch apply nvmeof mypool mygroup --placement="smithi188"
-sleep 20
-sudo ./cephadm shell ceph orch ls
-sudo ./cephadm shell ceph orch ps
-sudo ./cephadm shell rbd create mypool/myimage --size 8Gi
-sudo ./cephadm shell rbd ls mypool
-sudo ./cephadm shell ceph -s
+# # setup nvmeof
+# sudo ./cephadm shell ceph -s
+# sudo ./cephadm shell ceph config set mgr mgr/cephadm/container_image_nvmeof quay.io/ceph/nvmeof:latest
+# sudo ./cephadm shell ceph config get mgr mgr/cephadm/container_image_nvmeof
+# sudo ./cephadm shell ceph osd pool create mypool
+# sudo ./cephadm shell rbd pool init -p mypool
+# sudo ./cephadm shell ceph orch apply nvmeof mypool mygroup --placement="smithi188"
+# sleep 20
+# sudo ./cephadm shell ceph orch ls
+# sudo ./cephadm shell ceph orch ps
+# sudo ./cephadm shell rbd create mypool/myimage --size 8Gi
+# sudo ./cephadm shell rbd ls mypool
+# sudo ./cephadm shell ceph -s
 
 
 # echo 'line 1, '"${kernel}"'
