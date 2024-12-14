@@ -192,6 +192,18 @@ class NVMeOFCollector:
         return {subsys.nqn: subsys for subsys in resp.subsystems}
 
     @timer
+    def _list_namespaces(self, subsystem_list):
+        """Fetch abbreviated namespace information used by the CLI"""
+        namespace_map = {}
+        for subsys in subsystem_list:
+            resp = self.gateway_rpc.list_namespaces(pb2.list_namespaces_req(subsystem=subsys.nqn))
+            if resp.status != 0:
+                logger.error(f"Exporter failed to execute list_namespaces: {resp.error_message}")
+                continue
+            namespace_map[subsys.nqn] = {ns.nsid: ns for ns in resp.namespaces}
+        return namespace_map
+
+    @timer
     def _get_connection_map(self, subsystem_list):
         """Fetch connection information for all defined subsystems"""
         connection_map = {}
@@ -211,6 +223,7 @@ class NVMeOFCollector:
         self.subsystems = self._get_subsystems()
         self.subsystems_cli = self._list_subsystems()
         self.connections = self._get_connection_map(self.subsystems)
+        self.namespaces = self._list_namespaces(self.subsystems)
 
     @ttl
     def collect(self):
@@ -369,7 +382,7 @@ class NVMeOFCollector:
         subsystem_namespace_metadata = GaugeMetricFamily(
             f"{self.metric_prefix}_subsystem_namespace_metadata",
             "Namespace information for the subsystem",
-            labels=["nqn", "nsid", "bdev_name", "anagrpid"])
+            labels=["nqn", "nsid", "bdev_name", "anagrpid", "pool", "image"])
         host_connection_state = GaugeMetricFamily(
             f"{self.metric_prefix}_host_connection_state",
             "Host connection state 0=disconnected, 1=connected",
@@ -398,11 +411,15 @@ class NVMeOFCollector:
             subsystem_namespace_count.add_metric([nqn], len(subsys.namespaces))
             subsystem_namespace_limit.add_metric([nqn], subsys.max_namespaces)
             for ns in subsys.namespaces:
+                image = self.namespaces[nqn][ns.nsid].rbd_image_name
+                pool = self.namespaces[nqn][ns.nsid].rbd_pool_name
                 subsystem_namespace_metadata.add_metric([
                     nqn,
                     str(ns.nsid),
                     ns.bdev_name,
-                    str(ns.anagrpid)
+                    str(ns.anagrpid),
+                    pool,
+                    image,
                 ], 1)
 
             try:

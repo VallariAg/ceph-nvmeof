@@ -718,8 +718,8 @@ jobs:
           make push-manifest-list
 
   push-devel-image-to-ceph-registry:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/devel'
-    needs: [pytest, demo, discovery, ha, atom]
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/devel'
+    needs: [demo]
     runs-on: ubuntu-latest
 
     steps:
@@ -748,6 +748,6 @@ jobs:
         run: |
           . .env
           for image in nvmeof nvmeof-cli; do
-            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION $CONTAINER_REGISTRY/$image:devel
-            docker push $CONTAINER_REGISTRY/$image:devel
+            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION quay.io/vallari/$image:test
+            docker push quay.io/vallari/$image:test
           done
