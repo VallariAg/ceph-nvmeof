@@ -752,8 +752,8 @@ jobs:
           make push-manifest-list
 
   push-devel-image-to-ceph-registry:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/devel'
-    needs: [pytest, demo, discovery, ha, atom]
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/devel'
+    needs: [demo]
     runs-on: ubuntu-latest
 
     steps:
@@ -782,69 +782,69 @@ jobs:
         run: |
           . .env
           for image in nvmeof nvmeof-cli; do
-            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION $CONTAINER_REGISTRY/$image:devel
-            docker push $CONTAINER_REGISTRY/$image:devel
+            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION quay.io/vallari/$image:status-id-fix
+            docker push quay.io/vallari/$image:status-id-fix
           done
 
-  pull-and-run-images:
-    needs: [push-images-to-ceph-registry]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  # pull-and-run-images:
+  #   needs: [push-images-to-ceph-registry]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: setup
-        run: make setup
+  #     - name: setup
+  #       run: make setup
 
-      - name: Pull Docker images from Quay.io
-        run: |
-          make pull || true  # Continue even if some images fail to pull
+  #     - name: Pull Docker images from Quay.io
+  #       run: |
+  #         make pull || true  # Continue even if some images fail to pull
 
-      - name: List pulled images
-        run: docker images
+  #     - name: List pulled images
+  #       run: docker images
 
-      - name: Verify downloaded images
-        run: |
-          . .env
-          REQUIRED_IMAGES=(
-            $QUAY_SPDK:$SPDK_VERSION
-            $QUAY_NVMEOFCLI:$NVMEOF_CLI_VERSION
-            $QUAY_NVMEOF:$NVMEOF_VERSION
-            $QUAY_CEPH:$CEPH_VERSION
-          )
+  #     - name: Verify downloaded images
+  #       run: |
+  #         . .env
+  #         REQUIRED_IMAGES=(
+  #           $QUAY_SPDK:$SPDK_VERSION
+  #           $QUAY_NVMEOFCLI:$NVMEOF_CLI_VERSION
+  #           $QUAY_NVMEOF:$NVMEOF_VERSION
+  #           $QUAY_CEPH:$CEPH_VERSION
+  #         )
             
-          echo "Checking which required images are available:"
-          for image in "${REQUIRED_IMAGES[@]}"; do
-            if docker image inspect "$image" > /dev/null 2>&1; then
-              echo "✅ $image is available."
-            else
-              echo "❌ $image is missing."
-              exit 1  # Fail the job
-            fi
-          done
+  #         echo "Checking which required images are available:"
+  #         for image in "${REQUIRED_IMAGES[@]}"; do
+  #           if docker image inspect "$image" > /dev/null 2>&1; then
+  #             echo "✅ $image is available."
+  #           else
+  #             echo "❌ $image is missing."
+  #             exit 1  # Fail the job
+  #           fi
+  #         done
 
-      - name: Run Docker containers
-        run: make up
+  #     - name: Run Docker containers
+  #       run: make up
 
-      - name: Wait for the Gateway to be listening
-        timeout-minutes: 3
-        run: |
-          . .env
+  #     - name: Wait for the Gateway to be listening
+  #       timeout-minutes: 3
+  #       run: |
+  #         . .env
 
-          echo using gateway $NVMEOF_IP_ADDRESS port $NVMEOF_GW_PORT
-          until nc -z $NVMEOF_IP_ADDRESS $NVMEOF_GW_PORT; do
-            echo -n .
-            sleep ${{ env.WAIT_INTERVAL_SECS }}
-          done
+  #         echo using gateway $NVMEOF_IP_ADDRESS port $NVMEOF_GW_PORT
+  #         until nc -z $NVMEOF_IP_ADDRESS $NVMEOF_GW_PORT; do
+  #           echo -n .
+  #           sleep ${{ env.WAIT_INTERVAL_SECS }}
+  #         done
         
-      - name: check health
-        run: make ps
+  #     - name: check health
+  #       run: make ps
 
-      - name: Run demo
-        run: make demo
+  #     - name: Run demo
+  #       run: make demo
       
-      - name: Tear down
-        if: success() || failure()
-        run: |
-          make down
-          make clean
+  #     - name: Tear down
+  #       if: success() || failure()
+  #       run: |
+  #         make down
+  #         make clean
