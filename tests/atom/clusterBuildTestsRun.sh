@@ -16,9 +16,9 @@ ATOM_SHA=$3
 ACTION_URL=$4
 NIGHTLY=$5
 
-RUNNER_FOLDER='/home/cephnvme/actions-runner-ceph'
+RUNNER_FOLDER='/home/cephnvme/actions-runner-ceph-m7'
 BUSY_FILE='/home/cephnvme/busyServer.txt'
-RUNNER_NIGHTLY_FOLDER='/home/cephnvme/actions-runner-ceph-m7'
+RUNNER_NIGHTLY_FOLDER='/home/cephnvme/actions-runner-ceph-m8'
 BUSY_NIGHTLY_FILE='/home/cephnvme/busyServerNightly.txt'
 
 check_cluster_busy() {
@@ -41,13 +41,13 @@ check_cluster_busy() {
 hostname
 if [ "$5" != "nightly" ]; then
     rm -rf $RUNNER_FOLDER/ceph-nvmeof-atom
-    sudo rm -rf /root/.ssh/atom_backup/artifact/multiIBMCloudServers_m6/*
-    sudo ls -lta /root/.ssh/atom_backup/artifact/multiIBMCloudServers_m6
+    sudo rm -rf /root/.ssh/atom_backup/artifact/multiIBMCloudServers_m7/*
+    sudo ls -lta /root/.ssh/atom_backup/artifact/multiIBMCloudServers_m7
     cd $RUNNER_FOLDER
 else
     rm -rf $RUNNER_NIGHTLY_FOLDER/ceph-nvmeof-atom
-    sudo rm -rf /root/.ssh/atom_backup/artifact/multiIBMCloudServers_m7/*
-    sudo ls -lta /root/.ssh/atom_backup/artifact/multiIBMCloudServers_m7
+    sudo rm -rf /root/.ssh/atom_backup/artifact/multiIBMCloudServers_m8/*
+    sudo ls -lta /root/.ssh/atom_backup/artifact/multiIBMCloudServers_m8
     cd $RUNNER_NIGHTLY_FOLDER
 fi
 
@@ -101,7 +101,7 @@ if [ "$5" != "nightly" ]; then
         --dont-power-off-cloud-vms \
         --ibm-cloud-key=nokey \
         --github-nvmeof-token=nokey \
-        --env=m6
+        --env=m7
 else
     check_cluster_busy "$BUSY_NIGHTLY_FILE" "$ACTION_URL"
     sudo docker run \
@@ -120,7 +120,7 @@ else
         --subsystem-num=118 \
         --ns-num=8 \
         --subsystem-max-ns-num=1024 \
-        --failover-num=6 \
+        --failover-num=10 \
         --failover-num-after-upgrade=2 \
         --rbd-size=200M \
         --seed=0 \
@@ -135,13 +135,21 @@ else
         --mon-client-kill \
         --nvmeof-daemon-remove \
         --github-action-deployment \
-        --journalctl-to-console \
         --dont-power-off-cloud-vms \
         --dont-use-hugepages \
-	--concise-output \
+        --concise-output \
         --skip-lb-group-change-test \
+        --skip-multi-hosts-conn-test \
         --ibm-cloud-key=nokey \
         --github-nvmeof-token=nokey \
-        --env=m7
+        --env=m8
 fi
 set +x
+
+DOCKER_EXIT_STATUS=$?
+if [ $DOCKER_EXIT_STATUS -eq 0 ]; then
+    echo "Atom docker run succeeded"
+else
+    echo "Atom docker run failed!!!"
+    exit 1
+fi

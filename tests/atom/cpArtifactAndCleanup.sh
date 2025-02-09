@@ -25,14 +25,14 @@ process_artifacts() {
 
 if [ "$NIGHTLY" != "nightly" ]; then
     process_artifacts \
-        "/home/cephnvme/artifact_m6" \
-        "/root/.ssh/atom_backup/artifact/multiIBMCloudServers_m6" \
-        "/home/cephnvme/artifact_m6.tar.gz" \
-        "/home/cephnvme/busyServer.txt"
-else
-    process_artifacts \
         "/home/cephnvme/artifact_m7" \
         "/root/.ssh/atom_backup/artifact/multiIBMCloudServers_m7" \
         "/home/cephnvme/artifact_m7.tar.gz" \
+        "/home/cephnvme/busyServer.txt"
+else
+    process_artifacts \
+        "/home/cephnvme/artifact_m8" \
+        "/root/.ssh/atom_backup/artifact/multiIBMCloudServers_m8" \
+        "/home/cephnvme/artifact_m8.tar.gz" \
         "/home/cephnvme/busyServerNightly.txt"
 fi
