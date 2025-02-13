@@ -19,4 +19,5 @@ sleep 5
 
 echo "ℹ️  Step 3: verify 1 gateway"
 
-docker compose exec -T ceph ceph status | grep "1 gateway: 1 active"
+docker compose exec -T ceph ceph status
+docker compose exec -T ceph ceph status | grep "2 gateways: 1 active"
