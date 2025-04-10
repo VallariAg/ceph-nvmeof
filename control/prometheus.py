@@ -269,6 +269,8 @@ class NVMeOFCollector:
                 logger.debug(f"no rbd information present for bdev {bdev.get('name')}, skipping")
                 continue
 
+            logger.debug("VALLARI_TEST")
+            logger.debug(rbd_info)
             rbd_pool = rbd_info.get('pool_name')
             rbd_namespace = rbd_info.get('namespace', '')  # namespace is not currently present
             rbd_image = rbd_info.get('rbd_name')
