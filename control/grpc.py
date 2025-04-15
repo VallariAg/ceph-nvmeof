@@ -1402,6 +1402,22 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     errmsg = f"{errmsg}:\n{ex}"
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
+                
+        # add a default listener (with --defaultlisteners)
+        if request.isDefaultListener:
+            addr = self.config.get_with_default("gateway", "addr", "")
+            port = self.config.get_with_default("gateway", "port", "")
+            self.create_listener(
+                {
+                    "nqn": request.subsystem_nqn,
+                    "host_name": self.host_name, # socket.gethostname()
+                    # "adrfam": args.adrfam,
+                    "traddr": addr,
+                    "trsvcid": port,
+                    "secure": True,
+                    "verify_host_name": True 
+                }
+            ) 
 
         return pb2.subsys_status(status=0, error_message=os.strerror(0), nqn=request.subsystem_nqn)
 
