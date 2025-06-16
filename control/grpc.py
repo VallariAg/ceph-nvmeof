@@ -1277,7 +1277,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
         self.logger.info(
             f"Received request to create subsystem {request.subsystem_nqn}, enable_ha: "
             f"{request.enable_ha}, max_namespaces: {request.max_namespaces}, no group "
-            f"append: {request.no_group_append}, context: {context}{peer_msg}")
+            f"append: {request.no_group_append}, default listeners: {request.default_listeners}, "
+            f"context: {context}{peer_msg}")
 
         if not request.enable_ha:
             errmsg = f"{create_subsystem_error_prefix}: HA must be enabled for subsystems"
@@ -1445,6 +1446,23 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 if request.dhchap_key:
                     self.host_info.add_dhchap_key_to_subsystem(request.subsystem_nqn,
                                                                request.dhchap_key)
+
+                config_default_listeners = self.config.get_with_default(
+                    "gateway", "default_listener", "")
+                if request.default_listeners and config_default_listeners:
+                    for listener in config_default_listeners.split(","):
+                        ip, port = listener.rsplit(':', 1)
+                        self.create_listener(
+                            {
+                                "nqn": request.subsystem_nqn,
+                                "host_name": self.host_name,
+                                "traddr": ip,
+                                "trsvcid": port,
+                                "secure": True,
+                                "verify_host_name": True
+                            }
+                        )
+
             except Exception as ex:
                 self.logger.exception(create_subsystem_error_prefix)
                 errmsg = f"{create_subsystem_error_prefix}:\n{ex}"
@@ -1480,6 +1498,25 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     errmsg = f"{errmsg}:\n{ex}"
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
+
+        # TODO: add a default listener (with --defaultlisteners)
+        # self.logger.log(f'VALLARI_DEBUG: default_listeners: {request.default_listeners}')
+        # if request.default_listeners or True:  # remove True and add new cli arg
+        #     addr = self.config.get_with_default("gateway", "default_listener", "")
+        #     port = self.config.get_with_default("gateway", "default_listener_port", "4420")
+        #     self.logger.log(f'VALLARI_DEBUG: addr: {addr}')
+        #     self.logger.log(f'VALLARI_DEBUG: port: {port}')
+        #     self.create_listener(
+        #         {
+        #             "nqn": request.subsystem_nqn,
+        #             "host_name": self.host_name,  # socket.gethostname()
+        #             # "adrfam": args.adrfam,
+        #             "traddr": addr,
+        #             "trsvcid": port,
+        #             "secure": True,
+        #             "verify_host_name": True
+        #         }
+        #     )
 
         return pb2.subsys_status(status=0, error_message=os.strerror(0), nqn=request.subsystem_nqn)
 
@@ -5240,7 +5277,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
                         enable_ha=subsys_entry["enable_ha"],
                         no_group_append=subsys_entry["no_group_append"],
                         dhchap_key=dhchap_key_for_omap,
-                        key_encrypted=key_encrypted)
+                        key_encrypted=key_encrypted,
+                        default_listeners=subsys_entry["default_listeners"])
                     json_req = json_format.MessageToJson(
                         create_req, preserving_proto_field_name=True,
                         including_default_value_fields=True)

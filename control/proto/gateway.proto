@@ -231,6 +231,7 @@ message create_subsystem_req {
 	optional bool no_group_append = 5;
 	optional string dhchap_key = 6;
 	optional bool key_encrypted = 7;
+	optional bool default_listeners = 8;
 }
 
 message delete_subsystem_req {
