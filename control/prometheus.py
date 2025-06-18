@@ -182,12 +182,14 @@ class NVMeOFCollector:
     @timer
     def _get_subsystems(self):
         """Fetch aggregated subsystem information"""
+        logger.info("VALLARI_DEBUG: called _get_subsystems")
         subsystems_info = self.gateway_rpc.get_subsystems(pb2.get_subsystems_req(), None)
         return subsystems_info.subsystems
 
     @timer
     def _list_subsystems(self):
         """Fetch abbreviated subsystem information used by the CLI"""
+        logger.info("VALLARI_DEBUG: called _list_subsystems")
         resp = self.gateway_rpc.list_subsystems(pb2.list_subsystems_req())
         if resp.status != 0:
             logger.error(f"Exporter failed to execute list_subsystems: {resp.error_message}")
@@ -198,6 +200,7 @@ class NVMeOFCollector:
     @timer
     def _get_connection_map(self, subsystem_list):
         """Fetch connection information for all defined subsystems"""
+        logger.info(f"VALLARI_DEBUG: called _get_connection_map {subsystem_list=}")
         connection_map = {}
         for subsys in subsystem_list:
             resp = self.gateway_rpc.list_connections(pb2.list_connections_req(subsystem=subsys.nqn))
@@ -212,6 +215,7 @@ class NVMeOFCollector:
     def _get_host_map(self, subsystem_list):
         """Fetch host information for all defined subsystems"""
         host_map = {}
+        logger.info(f"VALLARI_DEBUG: called _get_host_map {subsystem_list=}")
         for subsys in subsystem_list:
             resp = self.gateway_rpc.list_hosts(pb2.list_hosts_req(subsystem=subsys.nqn,
                                                                   clear_alerts=False))
@@ -223,6 +227,7 @@ class NVMeOFCollector:
         return host_map
 
     def _get_data(self):
+        logger.info("VALLARI_DEBUG: called _get_data")
         """Gather data from the SPDK"""
         self.bdev_info = self._get_bdev_info()
         logger.debug("Done with _get_bdev_info()")
@@ -248,7 +253,7 @@ class NVMeOFCollector:
         """
         bdev_lookup = {}
 
-        logger.debug("Collecting stats from the SPDK")
+        logger.info("Collecting stats from the SPDK")
         self._get_data()
 
         elapsed = sum(self.method_timings.values())
@@ -460,6 +465,7 @@ class NVMeOFCollector:
                 ], 1 if conn.connected else 0)
 
             try:
+                logger.info(f"VALLARI_DEBUG: what am I doing here? {nqn=}")
                 host_info = self.hosts[nqn]
             except KeyError:
                 logger.debug(f"couldn't find {nqn} in host list, skipping")
