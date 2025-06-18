@@ -212,9 +212,11 @@ class NVMeOFCollector:
     def _get_host_map(self, subsystem_list):
         """Fetch host information for all defined subsystems"""
         host_map = {}
+        logger.debug(f"VALLARI_DEBUG 1 _get_host_map.subsystem_list {subsystem_list=}")
         for subsys in subsystem_list:
+            logger.debug(f"VALLARI_DEBUG 2 _get_host_map.subsys {subsys=}")
             resp = self.gateway_rpc.list_hosts(pb2.list_hosts_req(subsystem=subsys.nqn,
-                                                                  clear_alerts=True))
+                                                                  clear_alerts=False))
             if resp.status != 0:
                 logger.error(f"Exporter failed to fetch host info for "
                              f"{subsys.nqn}: {resp.error_message}")
@@ -461,10 +463,12 @@ class NVMeOFCollector:
 
             try:
                 host_info = self.hosts[nqn]
+                logger.debug(f"VALLARI_DEBUG 3 {host_info=}")
             except KeyError:
                 logger.debug(f"couldn't find {nqn} in host list, skipping")
                 continue
             for host in host_info.hosts:
+                logger.debug(f"VALLARI_DEBUG 4 {host=}")
                 host_keep_alive_timeout.add_metric([
                     self.gw_metadata.name,
                     nqn,
