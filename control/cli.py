@@ -830,7 +830,8 @@ class GatewayClient:
                                        max_namespaces=args.max_namespaces,
                                        enable_ha=True,
                                        no_group_append=args.no_group_append,
-                                       dhchap_key=args.dhchap_key)
+                                       dhchap_key=args.dhchap_key,
+                                       default_listeners=args.default_listeners)
         try:
             ret = self.stub.create_subsystem(req)
         except Exception as ex:
@@ -1063,6 +1064,10 @@ class GatewayClient:
                  "-k",
                  help="Subsystem DH-HMAC-CHAP key",
                  required=False),
+        argument("--default-listeners",  # default_listeners
+                 help="Automatically create listeners for this subsystem",
+                 action='store_true',
+                 required=False),
     ]
     subsys_del_args = [
         argument("--subsystem",
@@ -1162,7 +1167,8 @@ class GatewayClient:
             traddr=traddr,
             trsvcid=args.trsvcid,
             secure=args.secure,
-            verify_host_name=args.verify_host_name
+            verify_host_name=args.verify_host_name,
+            is_default_listener=False,
         )
 
         try:
@@ -1281,11 +1287,14 @@ class GatewayClient:
                     adrfam = GatewayEnumUtils.get_key_from_value(pb2.AddressFamily, lstnr.adrfam)
                     adrfam = self.format_adrfam(adrfam)
                     secure = "Yes" if lstnr.secure else "No"
+                    is_default_listener = lstnr.get('is_default_listener', False)
                     listeners_list.append([lstnr.host_name,
                                            lstnr.trtype,
                                            adrfam,
                                            f"{lstnr.traddr}:{lstnr.trsvcid}",
-                                           secure])
+                                           secure,
+                                           is_default_listener,
+                                           ])  # TODO: will this work?
                 if len(listeners_list) > 0:
                     if args.format == "text":
                         table_format = "fancy_grid"
@@ -1296,7 +1305,8 @@ class GatewayClient:
                                                       "Transport",
                                                       "Address Family",
                                                       "Address",
-                                                      "Secure"],
+                                                      "Secure",
+                                                      "Default Listener"],
                                              tablefmt=table_format)
                     out_func(f"Listeners for {args.subsystem}:\n{listeners_out}")
                 else:
