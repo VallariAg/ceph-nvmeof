@@ -1449,26 +1449,6 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     self.host_info.add_dhchap_key_to_subsystem(request.subsystem_nqn,
                                                                request.dhchap_key)
 
-                if context:
-                    try:
-                        config_default_listeners = self.config.get_with_default(
-                            "gateway", "default_listeners", "")
-                        if request.default_listeners and config_default_listeners:
-                            for listener in config_default_listeners.split(","):
-                                ip, port = listener.rsplit(':', 1)
-                                self.logger.info(f"VALLARI_DBEUG 1: {ip=} {port=} {context=}")
-                                lstnr_req = pb2.create_listener_req(
-                                    nqn=request.subsystem_nqn,
-                                    host_name=self.host_name,
-                                    traddr=ip,
-                                    trsvcid=int(port),
-                                    verify_host_name=True)
-                                self.create_listener(lstnr_req, context)
-                    except Exception as ex:
-                        errmsg = "VALLARI_DEBUG: "
-                        errmsg += f"Failure creating default listeners for {request.subsystem_nqn}"
-                        self.logger.error(errmsg)
-                        self.logger.exception(ex)
             except Exception as ex:
                 self.logger.exception(create_subsystem_error_prefix)
                 errmsg = f"{create_subsystem_error_prefix}:\n{ex}"
@@ -1504,6 +1484,29 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     errmsg = f"{errmsg}:\n{ex}"
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
+
+        self.logger.info("VALLARI_DBEUG 1: subsystem created!")
+        if context:
+            self.logger.info(f"VALLARI_DBEUG 2: {context=} found")
+            try:
+                config_default_listeners = self.config.get_with_default(
+                    "gateway", "default_listeners", "")
+                if request.default_listeners and config_default_listeners:
+                    for listener in config_default_listeners.split(","):
+                        ip, port = listener.rsplit(':', 1)
+                        self.logger.info(f"VALLARI_DBEUG 3: {ip=} {port=}")
+                        lstnr_req = pb2.create_listener_req(
+                            nqn=request.subsystem_nqn,
+                            host_name=self.host_name,
+                            traddr=ip,
+                            trsvcid=int(port),
+                            verify_host_name=True)
+                        self.create_listener_safe(lstnr_req, context)
+            except Exception as ex:
+                errmsg = "VALLARI_DEBUG: "
+                errmsg += f"Failure creating default listeners for {request.subsystem_nqn}"
+                self.logger.error(errmsg)
+                self.logger.exception(ex)
 
         return pb2.subsys_status(status=0, error_message=os.strerror(0), nqn=request.subsystem_nqn)
 
