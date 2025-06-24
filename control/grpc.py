@@ -1279,7 +1279,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
         self.logger.info(
             f"Received request to create subsystem {request.subsystem_nqn}, enable_ha: "
             f"{request.enable_ha}, max_namespaces: {request.max_namespaces}, no group "
-            f"append: {request.no_group_append}, context: {context}{peer_msg}")
+            f"append: {request.no_group_append}, default listeners: {request.default_listeners}, "
+            f"context: {context}{peer_msg}")
 
         if not request.enable_ha:
             errmsg = f"{create_subsystem_error_prefix}: HA must be enabled for subsystems"
@@ -1447,6 +1448,27 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 if request.dhchap_key:
                     self.host_info.add_dhchap_key_to_subsystem(request.subsystem_nqn,
                                                                request.dhchap_key)
+
+                if context:
+                    try:
+                        config_default_listeners = self.config.get_with_default(
+                            "gateway", "default_listeners", "")
+                        if request.default_listeners and config_default_listeners:
+                            for listener in config_default_listeners.split(","):
+                                ip, port = listener.rsplit(':', 1)
+                                self.logger.info(f"VALLARI_DBEUG 1: {ip=} {port=} {context=}")
+                                lstnr_req = pb2.create_listener_req(
+                                    nqn=request.subsystem_nqn,
+                                    host_name=self.host_name,
+                                    traddr=ip,
+                                    trsvcid=int(port),
+                                    verify_host_name=True)
+                                self.create_listener(lstnr_req, context)
+                    except Exception as ex:
+                        errmsg = "VALLARI_DEBUG: "
+                        errmsg += f"Failure creating default listeners for {request.subsystem_nqn}"
+                        self.logger.error(errmsg)
+                        self.logger.exception(ex)
             except Exception as ex:
                 self.logger.exception(create_subsystem_error_prefix)
                 errmsg = f"{create_subsystem_error_prefix}:\n{ex}"
