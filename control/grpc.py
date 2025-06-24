@@ -18,6 +18,7 @@ import threading
 import hashlib
 import tempfile
 import time
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Iterator, Callable
 from collections import defaultdict
@@ -1495,9 +1496,14 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     for listener in config_default_listeners.split(","):
                         ip, port = listener.rsplit(':', 1)
                         self.logger.info(f"VALLARI_DBEUG 3: {ip=} {port=}")
+                        self.logger.info(f"VALLARI_DBEUG 3.2: {ip_address(ip)=}")
+                        self.logger.info(f"VALLARI_DBEUG 3.3: {ip_address(ip).version=}")
+                        adrfam = f'ipv{ip_address(ip).version}'
+                        self.logger.info(f"VALLARI_DBEUG 4: {adrfam=}")
                         lstnr_req = pb2.create_listener_req(
                             nqn=request.subsystem_nqn,
                             host_name=self.host_name,
+                            adrfam=adrfam,
                             traddr=ip,
                             trsvcid=int(port),
                             verify_host_name=True)
