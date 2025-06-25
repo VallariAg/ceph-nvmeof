@@ -1506,7 +1506,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
                         adrfam=adrfam,
                         traddr=ip,
                         trsvcid=int(port),
-                        verify_host_name=True)
+                        verify_host_name=True,
+                        is_default_listener=True,
+                    )
                     self.create_listener_safe(lstnr_req, context)
         except Exception as ex:
             errmsg = "VALLARI_DEBUG: "
@@ -4587,9 +4589,13 @@ class GatewayService(pb2_grpc.GatewayServicer):
                          f" TCP {adrfam} listener for {request.nqn} at"
                          f" {request.traddr}:{request.trsvcid}, secure: {request.secure},"
                          f" verify host name: {request.verify_host_name},"
+                         f" is_default_listener: {request.is_default_listener}, "
                          f" context: {context}{peer_msg}")
 
         traddr = GatewayUtils.unescape_address(request.traddr)
+
+        if not request.create_listener_req:
+            request.create_listener_req = False
 
         if not request.nqn:
             errmsg = f"{create_listener_error_prefix}: missing subsystem NQN"
@@ -4747,13 +4753,15 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                  f"{resp['message']}"
                     return pb2.req_status(status=status, error_message=errmsg)
 
-            if context:
+            if context or request.is_default_listener:
                 # Update gateway state
                 try:
+                    self.logger.info(f"VALLARI_DEBUG: add listener to omap "
+                                     f"{request.nqn=} {request.traddr=}")
                     json_req = json_format.MessageToJson(
                         request, preserving_proto_field_name=True,
                         including_default_value_fields=True)
-                    self.gateway_state.add_listener(request.nqn,
+                    self.gateway_state.add_listener(request.nqn,  # add listener in omap
                                                     request.host_name,
                                                     "TCP", request.traddr,
                                                     request.trsvcid, json_req)
@@ -4972,6 +4980,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
         listeners = []
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
+            #  maybe instead ask like rpc_nvmf.nvmf_subsystem_remove_listener
             state = self.gateway_state.local.get_state()
             listener_prefix = GatewayState.build_partial_listener_key(request.subsystem, None)
             for key, val in state.items():

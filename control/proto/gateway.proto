@@ -287,6 +287,7 @@ message create_listener_req {
 	optional uint32 trsvcid = 6;
 	optional bool secure = 7;
 	optional bool verify_host_name = 8;
+	optional bool is_default_listener = 9;
 }
 
 message delete_listener_req {
