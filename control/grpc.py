@@ -18,6 +18,7 @@ import threading
 import hashlib
 import tempfile
 import time
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Iterator, Callable
 from collections import defaultdict
@@ -1517,7 +1518,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
         self.logger.info(
             f"Received request to create subsystem {request.subsystem_nqn}, enable_ha: "
             f"{request.enable_ha}, max_namespaces: {request.max_namespaces}, no group "
-            f"append: {request.no_group_append}, context: {context}{peer_msg}")
+            f"append: {request.no_group_append}, default listeners: {request.default_listeners}, "
+            f"context: {context}{peer_msg}")
 
         if not request.enable_ha:
             errmsg = f"{create_subsystem_error_prefix}: HA must be enabled for subsystems"
@@ -1722,11 +1724,40 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
 
+        if context:
+            try:
+                self.create_auto_listeners(request, context)
+            except Exception:
+                errmsg = f"Failure creating default listeners for {request.subsystem_nqn}"
+                self.logger.exception(errmsg)
         return pb2.subsys_status(status=0, error_message=os.strerror(0), nqn=request.subsystem_nqn)
 
     def create_subsystem(self, request, context=None):
         err_prefix = f"Failure creating subsystem {request.subsystem_nqn}: "
         return self.execute_grpc_function(self.create_subsystem_safe, request, context, err_prefix)
+
+    def create_auto_listeners(self, request, context):
+        config_default_listeners = self.config.get_with_default(
+            "gateway", "default_listeners", "")  # eg: `hostname=ip:port;hostname2=ip2:port`
+        if request.default_listeners and config_default_listeners:
+            for listener in config_default_listeners.split(";"):
+                if not listener:
+                    continue
+                if ('=' not in listener) or (':' not in listener):
+                    self.logger.info("Default listeners not defined correctly in gateway config "
+                                     f"(expected 'hostname=ip:port;') but found: {listener=}")
+                    continue
+                hostname, ip_port = listener.split('=', 1)
+                ip, port = ip_port.rsplit(':', 1)
+                adrfam = f'ipv{ip_address(ip).version}'
+                lstnr_req = pb2.create_listener_req(
+                    nqn=request.subsystem_nqn,
+                    host_name=hostname,
+                    adrfam=adrfam,
+                    traddr=ip,
+                    trsvcid=int(port),
+                    verify_host_name=False)
+                self.create_listener_safe(lstnr_req, context)
 
     def get_subsystem_namespaces(self, nqn) -> list:
         ns_list = []
