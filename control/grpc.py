@@ -1640,26 +1640,31 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
 
+        if request.default_listeners:
+            self.create_default_listener(request.subsystem_nqn)
+
+        return pb2.subsys_status(status=0, error_message=os.strerror(0), nqn=request.subsystem_nqn)
+
+    def create_default_listener(self, nqn):
         try:
             config_default_listeners = self.config.get_with_default(
                 "gateway", "default_listeners", "")
-            if request.default_listeners and config_default_listeners:
+            if config_default_listeners:
                 for listener in config_default_listeners.split(","):
                     ip, port = listener.rsplit(':', 1)
                     adrfam = f'ipv{ip_address(ip).version}'
                     lstnr_req = pb2.create_listener_req(
-                        nqn=request.subsystem_nqn,
+                        nqn=nqn,
                         host_name=self.host_name,
                         adrfam=adrfam,
                         traddr=ip,
                         trsvcid=int(port),
-                        verify_host_name=True)
-                    self.create_listener_safe(lstnr_req, context)
+                        verify_host_name=True,
+                        is_default_listener=True)
+                    self.create_listener_safe(lstnr_req, None)
         except Exception:
-            errmsg = f"Failure creating default listeners for {request.subsystem_nqn}"
+            errmsg = f"Failure creating default listeners for {nqn}"
             self.logger.exception(errmsg)
-
-        return pb2.subsys_status(status=0, error_message=os.strerror(0), nqn=request.subsystem_nqn)
 
     def create_subsystem(self, request, context=None):
         return self.execute_grpc_function(self.create_subsystem_safe, request, context)
@@ -4776,6 +4781,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                          f" TCP {adrfam} listener for {request.nqn} at"
                          f" {request.traddr}:{request.trsvcid}, secure: {request.secure},"
                          f" verify host name: {request.verify_host_name},"
+                         f" is_default_listener: {request.is_default_listener}"
                          f" context: {context}{peer_msg}")
 
         traddr = GatewayUtils.unescape_address(request.traddr)
@@ -4938,7 +4944,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                  f"{resp['message']}"
                     return pb2.req_status(status=status, error_message=errmsg)
 
-            if context:
+            if context or request.is_default_listener:
                 # Update gateway state
                 try:
                     json_req = json_format.MessageToJson(
