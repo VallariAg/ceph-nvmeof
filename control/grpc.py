@@ -6037,7 +6037,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
             self.logger.debug(f"thread_get_stats: {thread_stats}")
             self.logger.info(f"VALLARI_DEBUG thread_get_stats: {thread_stats}")
             threads = []
-            self.logger.info(f"VALLARI_DEBUG thread_get_stats.threads: {thread_stats.get('threads', [])}")
+            self.logger.info(f"VALLARI_DEBUG thread_get_stats.threads: \
+                                {thread_stats.get('threads', [])}")
             for spdk_thread in thread_stats.get("threads", []):
                 if "poll" not in spdk_thread["name"]:
                     continue
@@ -6063,12 +6064,10 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 errmsg = f"{error_prefix}: {resp['message']}"
             return pb2.threads_stats_info(status=status, error_message=errmsg)
 
-
     def get_thread_stats(self, request, context=None):
         """Get spdk thread statistics"""
 
         return self.execute_grpc_function(self.get_thread_stats_safe, request, context)
-
 
     def get_gateway_log_level(self, request, context=None):
         """Get gateway's log level"""

@@ -81,26 +81,26 @@ jobs:
           path: |
             spdk.tar
 
-  build-ceph:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  # build-ceph:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Build container images - ceph
-        run: make build SVC=ceph
+  #     - name: Build container images - ceph
+  #       run: make build SVC=ceph
 
-      - name: Save container images
-        run: |
-          . .env
-          docker save $QUAY_CEPH:$CEPH_VERSION > ceph.tar
+  #     - name: Save container images
+  #       run: |
+  #         . .env
+  #         docker save $QUAY_CEPH:$CEPH_VERSION > ceph.tar
 
-      - name: Upload ceph container image
-        uses: actions/upload-artifact@v4
-        with:
-          name: container_images_ceph
-          path: |
-            ceph.tar
+  #     - name: Upload ceph container image
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: container_images_ceph
+  #         path: |
+  #           ceph.tar
 
   # pytest:
   #   needs: [build, build-ceph]
@@ -710,7 +710,7 @@ jobs:
 
   push-devel-image-to-ceph-registry:
     # if: github.event_name == 'push' && github.ref == 'refs/heads/devel'
-    needs: [build, build-ceph]
+    needs: [build]
     # needs: [pytest, demo, discovery, ha, atom]
     runs-on: ubuntu-latest
 
