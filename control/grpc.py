@@ -29,6 +29,7 @@ from binascii import crc32
 
 from spdk.rpc import spdk_get_version
 import spdk.rpc.bdev as rpc_bdev
+import spdk.rpc.app as rpc_app
 import spdk.rpc.nvmf as rpc_nvmf
 import spdk.rpc.notify as rpc_notify
 import spdk.rpc.keyring as rpc_keyring
@@ -6023,6 +6024,51 @@ class GatewayService(pb2_grpc.GatewayServicer):
         """Get gateway's NVMf statistics"""
 
         return self.execute_grpc_function(self.get_gateway_stats_safe, request, context)
+
+    def get_thread_stats_safe(self, request, context=None):
+        """Get SPDK thread stats"""
+
+        assert self.rpc_lock.locked(), "RPC is unlocked when calling get_thread_stats_safe()"
+        error_prefix = "Failure getting SPDK thread statistics"
+        peer_msg = self.get_peer_message(context)
+        self.logger.info(f"Received request to get spdk thread stats {peer_msg}")
+        try:
+            thread_stats = rpc_app.thread_get_stats(self.spdk_rpc_client)
+            self.logger.debug(f"thread_get_stats: {thread_stats}")
+            self.logger.info(f"VALLARI_DEBUG thread_get_stats: {thread_stats}")
+            threads = []
+            self.logger.info(f"VALLARI_DEBUG thread_get_stats.threads: {thread_stats.get('threads', [])}")
+            for spdk_thread in thread_stats.get("threads", []):
+                if "poll" not in spdk_thread["name"]:
+                    continue
+                thread = pb2.spdk_thread_info(
+                    name=spdk_thread.get("name"),
+                    busy=spdk_thread.get("busy"),
+                    idle=spdk_thread.get("idle"),
+                )
+                threads.append(thread)
+                # if tick_rate:
+                #     reactor_utilization.add_metric([spdk_thread.get("name"), "busy"],
+                #                                 (spdk_thread.get("busy") / tick_rate))
+                #     reactor_utilization.add_metric([spdk_thread.get("name"), "idle"],
+                #                                 (spdk_thread.get("idle") / tick_rate))
+            return pb2.threads_stats_info(status=0, error_message=os.strerror(0), threads=threads)
+        except Exception as ex:
+            self.logger.exception(error_prefix)
+            errmsg = f"{error_prefix}:\n{ex}"
+            resp = self.parse_json_exeption(ex)
+            status = errno.EINVAL
+            if resp:
+                status = resp["code"]
+                errmsg = f"{error_prefix}: {resp['message']}"
+            return pb2.threads_stats_info(status=status, error_message=errmsg)
+
+
+    def get_thread_stats(self, request, context=None):
+        """Get spdk thread statistics"""
+
+        return self.execute_grpc_function(self.get_thread_stats_safe, request, context)
+
 
     def get_gateway_log_level(self, request, context=None):
         """Get gateway's log level"""

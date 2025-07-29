@@ -215,7 +215,9 @@ class NVMeOFCollector:
     @timer
     def _get_spdk_thread_stats(self):
         try:
-            return rpc.app.thread_get_stats(self.spdk_rpc_client)
+            req = pb2.get_spdk_thread_stats_req()
+            metadata = self.gateway_rpc.get_thread_stats(req)
+            return metadata
         except Exception:
             logger.exception("Error trying to call thread_get_stats()")
             return {}
