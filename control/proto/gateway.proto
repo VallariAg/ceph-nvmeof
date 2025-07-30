@@ -519,12 +519,13 @@ message thread_stats_info {
 	int32 status = 1;
 	string error_message = 2;
     repeated spdk_thread_info threads = 3;
+	uint64 tick_rate = 4;
 }
 
 message spdk_thread_info {
 	string name = 1;
-	uint32 busy = 2;
-	uint32 idle = 3;
+	uint64 busy = 2;
+	uint64 idle = 3;
 }
 
 message listener_info {

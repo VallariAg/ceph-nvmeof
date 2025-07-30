@@ -6040,20 +6040,17 @@ class GatewayService(pb2_grpc.GatewayServicer):
             self.logger.info(f"VALLARI_DEBUG thread_get_stats.threads: \
                                 {thread_stats.get('threads', [])}")
             for spdk_thread in thread_stats.get("threads", []):
-                if "poll" not in spdk_thread["name"]:
-                    continue
+                # if "poll" not in spdk_thread["name"]:
+                #     continue
                 thread = pb2.spdk_thread_info(
                     name=spdk_thread.get("name"),
                     busy=spdk_thread.get("busy"),
                     idle=spdk_thread.get("idle"),
                 )
                 threads.append(thread)
-                # if tick_rate:
-                #     reactor_utilization.add_metric([spdk_thread.get("name"), "busy"],
-                #                                 (spdk_thread.get("busy") / tick_rate))
-                #     reactor_utilization.add_metric([spdk_thread.get("name"), "idle"],
-                #                                 (spdk_thread.get("idle") / tick_rate))
-            return pb2.threads_stats_info(status=0, error_message=os.strerror(0), threads=threads)
+            return pb2.thread_stats_info(
+                status=0, error_message=os.strerror(0),
+                threads=threads, tick_rate=thread_stats.get("tick_rate", 0))
         except Exception as ex:
             self.logger.exception(error_prefix)
             errmsg = f"{error_prefix}:\n{ex}"
@@ -6062,7 +6059,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
             if resp:
                 status = resp["code"]
                 errmsg = f"{error_prefix}: {resp['message']}"
-            return pb2.threads_stats_info(status=status, error_message=errmsg)
+            return pb2.thread_stats_info(status=status, error_message=errmsg)
 
     def get_thread_stats(self, request, context=None):
         """Get spdk thread statistics"""

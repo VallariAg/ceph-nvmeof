@@ -740,8 +740,8 @@ jobs:
         run: |
           . .env
           for image in nvmeof nvmeof-cli; do
-            docker tag quay.io/ceph/$image:$NVMEOF_VERSION quay.io/vallari/$image:add-thread-grpc-ci
-            docker push quay.io/vallari/$image:add-thread-grpc-ci
+            docker tag quay.io/ceph/$image:$NVMEOF_VERSION quay.io/vallari/$image:add-thread-grpc-ci-10
+            docker push quay.io/vallari/$image:add-thread-grpc-ci-10
           done
 
   # pull-and-run-images:
