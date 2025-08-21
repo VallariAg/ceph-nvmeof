@@ -1644,12 +1644,15 @@ class GatewayService(pb2_grpc.GatewayServicer):
             config_default_listeners = self.config.get_with_default(
                 "gateway", "default_listeners", "")
             if request.default_listeners and config_default_listeners:
-                for listener in config_default_listeners.split(","):
-                    ip, port = listener.rsplit(':', 1)
+                for listener in config_default_listeners.split(";"):
+                    if not listener:
+                        continue
+                    hostname, ip_port = listener.split('=', 1)
+                    ip, port = ip_port.rsplit(':', 1)
                     adrfam = f'ipv{ip_address(ip).version}'
                     lstnr_req = pb2.create_listener_req(
                         nqn=request.subsystem_nqn,
-                        host_name=self.host_name,
+                        host_name=hostname,
                         adrfam=adrfam,
                         traddr=ip,
                         trsvcid=int(port),
