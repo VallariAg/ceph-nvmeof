@@ -921,6 +921,13 @@ class GatewayClient:
                 out_func(f"Adding subsystem {new_nqn}: Successful")
             else:
                 err_func(f"{ret.error_message}")
+            if ret.default_listeners:
+                for listener in ret.default_listeners:
+                    if listener.status == 0:
+                        out_func(f"Adding default listener {listener.ip_address}: Successful")
+                    else:
+                        err_func(f"Failure adding default listener {listener.ip_address}: \
+                                 {listener.error_message}")
         elif args.format == "json" or args.format == "yaml":
             ret_str = json_format.MessageToJson(ret, indent=4,
                                                 including_default_value_fields=True,
