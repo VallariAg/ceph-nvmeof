@@ -1754,28 +1754,45 @@ class GatewayService(pb2_grpc.GatewayServicer):
 
         if context:
             try:
-                self.create_auto_listeners(request, context)
+                req_status, created_listeners = self.create_auto_listeners(request, context)
+                if req_status == 0:
+                    return pb2.subsys_status(status=0, error_message=os.strerror(0),
+                                             nqn=request.subsystem_nqn,
+                                             default_listeners=created_listeners)
+                else:
+                    error_message = f"Subsystem {request.subsystem_nqn} created; \
+                                    failed to create one or more default listeners."
+                    return pb2.subsys_status(status=req_status, error_message=error_message,
+                                             nqn=request.subsystem_nqn,
+                                             default_listeners=created_listeners)
             except Exception:
-                errmsg = f"Failure creating default listeners for {request.subsystem_nqn}"
+                errmsg = f"Created subsystem {request.subsystem_nqn}. "
+                errmsg += "An error occured when creating default listeners."
                 self.logger.exception(errmsg)
+                return pb2.subsys_status(status=errno.EINVAL,
+                                         error_message=errmsg,
+                                         nqn=request.subsystem_nqn)
         return pb2.subsys_status(status=0, error_message=os.strerror(0), nqn=request.subsystem_nqn)
 
     def create_subsystem(self, request, context=None):
         return self.execute_grpc_function(self.create_subsystem_safe, request, context)
 
     def create_auto_listeners(self, request, context):
+        created_listeners = []
+        req_status = 0
         config_default_listeners = self.config.get_with_default(
-            "gateway", "default_listeners", "")  # eg: `hostname=ip:port;hostname2=ip2:port`
+            "gateway", "default_listeners", "")  # eg: `hostname=ip;hostname2=ip2`
         if request.default_listeners and config_default_listeners:
             for listener in config_default_listeners.split(";"):
                 if not listener:
                     continue
-                if ('=' not in listener) or (':' not in listener):
+                if ('=' not in listener):
                     self.logger.info("Default listeners not defined correctly in gateway config "
-                                     f"(expected 'hostname=ip:port;') but found: {listener=}")
+                                     f"(expected 'hostname=ip;') but found: {listener=}")
                     continue
-                hostname, ip_port = listener.split('=', 1)
-                ip, port = ip_port.rsplit(':', 1)
+                hostname, ip = listener.split('=', 1)
+                # ip, port = ip_port.rsplit(':', 1)
+                port = os.getenv("NVMEOF_IO_PORT") or "4420"
                 adrfam = f'ipv{ip_address(ip).version}'
                 lstnr_req = pb2.create_listener_req(
                     nqn=request.subsystem_nqn,
@@ -1784,7 +1801,16 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     traddr=ip,
                     trsvcid=int(port),
                     verify_host_name=False)
-                self.create_listener_safe(lstnr_req, context)
+                rt = self.create_listener_safe(lstnr_req, context)
+                dlistener = pb2.default_listener_status(
+                    status=rt.status,
+                    ip_address=ip,
+                    error_message=rt.error_message,
+                )
+                if rt.status != 0:
+                    req_status = rt.status
+                created_listeners.append(dlistener)
+        return (req_status, created_listeners)
 
     def get_subsystem_namespaces(self, nqn) -> list:
         ns_list = []

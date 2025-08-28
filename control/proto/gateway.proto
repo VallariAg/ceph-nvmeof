@@ -389,6 +389,13 @@ message subsys_status {
 	int32 status = 1;
 	string error_message = 2;
 	string nqn = 3;
+	repeated default_listener_status default_listeners = 4;
+}
+
+message default_listener_status {
+	int32 status = 1;
+	string ip_address = 2;	
+	string error_message = 3;
 }
 
 message nsid_status {
