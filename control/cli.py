@@ -924,10 +924,10 @@ class GatewayClient:
             if ret.default_listeners:
                 for listener in ret.default_listeners:
                     if listener.status == 0:
-                        out_func(f"Adding default listener {listener.ip_address}: Successful")
+                        out_func(f"Adding default listener {listener.ip_address}; Successful")
                     else:
-                        err_func(f"Failure adding default listener {listener.ip_address}: \
-                                 {listener.error_message}")
+                        err_func(f"Failure adding default listener {listener.ip_address}; "
+                                 f"{listener.error_message}")
         elif args.format == "json" or args.format == "yaml":
             ret_str = json_format.MessageToJson(ret, indent=4,
                                                 including_default_value_fields=True,
@@ -1139,8 +1139,7 @@ class GatewayClient:
                  help="Subsystem DH-HMAC-CHAP key",
                  required=False),
         argument("--default-listeners",
-                 help="Automatically create listeners for this subsystem",
-                 action='store_true',
+                 help="For this subnet, automatically create listeners for this subsystem",
                  required=False),
     ]
     subsys_del_args = [
