@@ -1139,8 +1139,7 @@ class GatewayClient:
                  help="Subsystem DH-HMAC-CHAP key",
                  required=False),
         argument("--default-listeners",
-                 help="Automatically create listeners for this subsystem",
-                 action='store_true',
+                 help="For this subnet, automatically create listeners for this subsystem",
                  required=False),
     ]
     subsys_del_args = [

@@ -13,6 +13,7 @@ import json
 import uuid
 import random
 import os
+import re
 import errno
 import threading
 import hashlib
@@ -1752,7 +1753,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
 
-        if context:
+        if context and request.default_listeners:
             try:
                 req_status, created_listeners = self.create_auto_listeners(request, context)
                 if req_status == 0:
@@ -1778,6 +1779,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
         return self.execute_grpc_function(self.create_subsystem_safe, request, context)
 
     def create_auto_listeners(self, request, context):
+        def _is_ip_in_subnet(ip, subnet):
+            return re.match(subnet, ip)
         created_listeners = []
         req_status = 0
         config_default_listeners = self.config.get_with_default(
@@ -1791,24 +1794,26 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                      f"(expected 'hostname=ip;') but found: {listener=}")
                     continue
                 hostname, ip = listener.split('=', 1)
-                port = os.getenv("NVMEOF_IO_PORT") or "4420"
-                adrfam = f'ipv{ip_address(ip).version}'
-                lstnr_req = pb2.create_listener_req(
-                    nqn=request.subsystem_nqn,
-                    host_name=hostname,
-                    adrfam=adrfam,
-                    traddr=ip,
-                    trsvcid=int(port),
-                    verify_host_name=False)
-                rt = self.create_listener_safe(lstnr_req, context)
-                if rt.status != 0:
-                    req_status = rt.status
-                dlistener = pb2.default_listener_status(
-                    status=rt.status,
-                    ip_address=ip,
-                    error_message=rt.error_message,
-                )
-                created_listeners.append(dlistener)
+                for ip_format in request.default_listeners.split(","):
+                    if _is_ip_in_subnet(ip, ip_format):
+                        port = os.getenv("NVMEOF_IO_PORT") or "4420"
+                        adrfam = f'ipv{ip_address(ip).version}'
+                        lstnr_req = pb2.create_listener_req(
+                            nqn=request.subsystem_nqn,
+                            host_name=hostname,
+                            adrfam=adrfam,
+                            traddr=ip,
+                            trsvcid=int(port),
+                            verify_host_name=False)
+                        rt = self.create_listener_safe(lstnr_req, context)
+                        if rt.status != 0:
+                            req_status = rt.status
+                        dlistener = pb2.default_listener_status(
+                            status=rt.status,
+                            ip_address=ip,
+                            error_message=rt.error_message,
+                        )
+                        created_listeners.append(dlistener)
         return (req_status, created_listeners)
 
     def get_subsystem_namespaces(self, nqn) -> list:
