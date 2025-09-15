@@ -1725,7 +1725,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
 
-        if context and request.default_listeners:
+        if request.default_listeners:
             try:
                 req_status, created_listeners = self.create_auto_listeners(request, context)
                 if req_status == 0:
@@ -1757,16 +1757,18 @@ class GatewayService(pb2_grpc.GatewayServicer):
         created_listeners = []
         req_status = 0
         config_default_listeners = self.config.get_with_default(
-            "gateway", "default_listeners", "")  # eg: `hostname=ip;hostname2=ip2`
+            "gateway", "default_listeners", "")  # eg: `ip;ip2`
         if request.default_listeners and config_default_listeners:
             for listener in config_default_listeners.split(";"):
                 if not listener:
                     continue
-                if ('=' not in listener):
-                    self.logger.info("Default listeners not defined correctly in gateway config "
-                                     f"(expected 'hostname=ip;') but found: {listener=}")
-                    continue
-                hostname, ip = listener.split('=', 1)
+                ip = listener.strip()
+                hostname = self.host_name
+                # if ('=' not in listener):
+                #     self.logger.info("Default listeners not defined correctly in gateway config "
+                #                      f"(expected 'hostname=ip;') but found: {listener=}")
+                #     continue
+                # hostname, ip = listener.split('=', 1)
                 for ip_format in request.default_listeners.split(","):
                     if _is_ip_in_subnet(ip, ip_format):
                         port = os.getenv("NVMEOF_IO_PORT") or "4420"
@@ -1778,7 +1780,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                             traddr=ip,
                             trsvcid=int(port),
                             verify_host_name=False)
-                        rt = self.create_listener_safe(lstnr_req, context)
+                        rt = self.create_listener_safe(lstnr_req, None)
                         status = rt.status
                         if rt.status == errno.EREMOTE:
                             status = 0
@@ -5164,7 +5166,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                  f"{resp['message']}"
                     return pb2.req_status(status=status, error_message=errmsg)
 
-            if context or request.default_listener_status:
+            if context:
                 # Update gateway state
                 try:
                     json_req = json_format.MessageToJson(
