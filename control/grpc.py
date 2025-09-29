@@ -13,13 +13,12 @@ import json
 import uuid
 import random
 import os
-import re
 import errno
 import threading
 import hashlib
 import tempfile
 import time
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 from pathlib import Path
 from typing import Iterator, Callable
 from collections import defaultdict
@@ -1752,8 +1751,6 @@ class GatewayService(pb2_grpc.GatewayServicer):
         return self.execute_grpc_function(self.create_subsystem_safe, request, context, err_prefix)
 
     def create_auto_listeners(self, request, context):
-        def _is_ip_in_subnet(ip_, subnet):
-            return re.match(subnet, ip_)
         created_listeners = []
         req_status = 0
         config_default_listeners = self.config.get_with_default(
@@ -1764,13 +1761,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     continue
                 ip = listener.strip()
                 hostname = self.host_name
-                # if ('=' not in listener):
-                #     self.logger.info("Default listeners not defined correctly in gateway config "
-                #                      f"(expected 'hostname=ip;') but found: {listener=}")
-                #     continue
-                # hostname, ip = listener.split('=', 1)
-                for ip_format in request.default_listeners.split(","):
-                    if _is_ip_in_subnet(ip, ip_format):
+                for subnet in request.default_listeners.split(","):
+                    if ip_address(ip) in ip_network(subnet):
                         port = os.getenv("NVMEOF_IO_PORT") or "4420"
                         adrfam = f'ipv{ip_address(ip).version}'
                         lstnr_req = pb2.create_listener_req(

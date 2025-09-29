@@ -924,7 +924,8 @@ class GatewayClient:
             if ret.default_listeners:
                 for listener in ret.default_listeners:
                     if listener.status == 0:
-                        out_func(f"Adding default listener {listener.ip_address}; Successful")
+                        out_func(f"Adding default listeners for {args.default_listeners};"
+                                 " Successful")
                     else:
                         err_func(f"Failure adding default listener {listener.ip_address}; "
                                  f"{listener.error_message}")
