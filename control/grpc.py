@@ -1591,6 +1591,17 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                              error_message=errmsg,
                                              nqn=request.subsystem_nqn)
 
+        if context and request.default_listeners:
+            config_default_listeners = self.config.get_with_default(
+                "gateway", "default_listeners", "")
+            if not config_default_listeners:
+                errmsg = f"{create_subsystem_error_prefix}: Network mask was passed to this " \
+                         f"command, but spec files does not have network-mask properly defined"
+                self.logger.error(errmsg)
+                return pb2.subsys_status(status=errno.EINVAL,
+                                         error_message=errmsg,
+                                         nqn=request.subsystem_nqn)
+
         # Set client ID range according to group id assigned by the monitor
         offset = self.group_id * CNTLID_RANGE_SIZE
         min_cntlid = offset + 1
@@ -1755,13 +1766,14 @@ class GatewayService(pb2_grpc.GatewayServicer):
         req_status = 0
         config_default_listeners = self.config.get_with_default(
             "gateway", "default_listeners", "")  # eg: `ip;ip2`
-        if request.default_listeners and config_default_listeners:
+        allowed_subnets = request.default_listeners
+        if allowed_subnets and config_default_listeners:
             for listener in config_default_listeners.split(";"):
                 if not listener:
                     continue
                 ip = listener.strip()
                 hostname = self.host_name
-                for subnet in request.default_listeners.split(","):
+                for subnet in allowed_subnets.split(","):
                     if ip_address(ip) in ip_network(subnet):
                         port = os.getenv("NVMEOF_IO_PORT") or "4420"
                         adrfam = f'ipv{ip_address(ip).version}'
@@ -5375,6 +5387,23 @@ class GatewayService(pb2_grpc.GatewayServicer):
                      f"{request.trsvcid} from {request.nqn}: "
         return self.execute_grpc_function(self.delete_listener_safe, request, context, err_prefix)
 
+    def is_active_listener(self, subsystem_nqn, listener, secure):
+        active = False
+        if subsystem_nqn in self.subsystem_listeners:
+            lookfor = (listener["adrfam"].lower(), listener["traddr"],
+                       int(listener["trsvcid"]), secure, False)
+            if lookfor in self.subsystem_listeners[subsystem_nqn]:
+                active = False
+            else:
+                lookfor = (listener["adrfam"].lower(), listener["traddr"],
+                           int(listener["trsvcid"]), secure, True)
+                if lookfor in self.subsystem_listeners[subsystem_nqn]:
+                    active = True
+                else:
+                    self.logger.warning(f"Can't find listener "
+                                        f"{listener} in local list")
+        return active
+
     def list_listeners_safe(self, request, context):
         """List listeners."""
 
@@ -5389,6 +5418,38 @@ class GatewayService(pb2_grpc.GatewayServicer):
             return pb2.listeners_info(status=errno.ENOENT, error_message=errmsg, listeners=[])
 
         listeners = []
+        pool = self.config.get("ceph", "pool")
+        group = self.config.get("gateway", "group")
+        nvmemon_listeners = self.ceph_utils.get_gw_listeners(pool, group)
+        if nvmemon_listeners:
+            subsystem_nqn = request.subsystem
+            if subsystem_nqn in nvmemon_listeners:
+                listeners_list = []
+                subsystem_listeners = nvmemon_listeners[subsystem_nqn]
+                for _listener in subsystem_listeners:
+                    # GatewayEnumUtils.get_key_from_value(
+                    # pb2.AddressFamily, _listener["address_family"]),
+                    listener = {
+                        "host_name": "test",  # TODO
+                        "adrfam": (_listener["address_family"] or '').lower(),
+                        "trsvcid": int(_listener["svcid"] or 0),
+                        "nqn": subsystem_nqn,
+                        "traddr": _listener["address"],
+                    }
+                    self.logger.info(f"VALLARI_DEBUG_1 {listener=}")
+                    secure = False  # TODO
+                    active = self.is_active_listener(subsystem_nqn, listener,
+                                                     secure=secure)
+                    one_listener = pb2.listener_info(host_name=listener["host_name"],
+                                                     trtype="TCP",
+                                                     adrfam=listener["adrfam"],
+                                                     traddr=listener["traddr"],
+                                                     trsvcid=listener["trsvcid"],
+                                                     secure=secure, active=active)
+                    listeners_list.append(one_listener)
+                return pb2.listeners_info(status=0, error_message=os.strerror(0),
+                                          listeners=listeners_list)
+
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
             state = self.gateway_state.local.get_state()
@@ -5406,20 +5467,22 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     secure = False
                     if "secure" in listener:
                         secure = listener["secure"]
-                    active = False
-                    if request.subsystem in self.subsystem_listeners:
-                        lookfor = (listener["adrfam"].lower(), listener["traddr"],
-                                   int(listener["trsvcid"]), secure, False)
-                        if lookfor in self.subsystem_listeners[request.subsystem]:
-                            active = False
-                        else:
-                            lookfor = (listener["adrfam"].lower(), listener["traddr"],
-                                       int(listener["trsvcid"]), secure, True)
-                            if lookfor in self.subsystem_listeners[request.subsystem]:
-                                active = True
-                            else:
-                                self.logger.warning(f"Can't find listener "
-                                                    f"{listener} in local list")
+                    # active = False
+                    # if request.subsystem in self.subsystem_listeners:
+                    #     lookfor = (listener["adrfam"].lower(), listener["traddr"],
+                    #                int(listener["trsvcid"]), secure, False)
+                    #     if lookfor in self.subsystem_listeners[request.subsystem]:
+                    #         active = False
+                    #     else:
+                    #         lookfor = (listener["adrfam"].lower(), listener["traddr"],
+                    #                    int(listener["trsvcid"]), secure, True)
+                    #         if lookfor in self.subsystem_listeners[request.subsystem]:
+                    #             active = True
+                    #         else:
+                    #             self.logger.warning(f"Can't find listener "
+                    #                                 f"{listener} in local list")
+                    active = self.is_active_listener(request.subsystem, listener,
+                                                     secure=secure)
                     one_listener = pb2.listener_info(host_name=listener["host_name"],
                                                      trtype="TCP",
                                                      adrfam=listener["adrfam"],
