@@ -900,7 +900,9 @@ class GatewayClient:
                                        max_namespaces=args.max_namespaces,
                                        enable_ha=True,
                                        no_group_append=args.no_group_append,
-                                       dhchap_key=args.dhchap_key)
+                                       dhchap_key=args.dhchap_key,
+                                       network_mask=args.network_mask,
+                                       secure_listeners=args.secure_listeners)
         try:
             ret = self.stub.create_subsystem(req)
         except Exception as ex:
@@ -923,6 +925,14 @@ class GatewayClient:
                 out_func(f"Adding subsystem {new_nqn}: Successful")
             else:
                 err_func(f"{ret.error_message}")
+            # if ret.default_listeners:
+            #     for listener in ret.default_listeners:
+            #         if listener.status == 0:
+            #             out_func(f"Adding default listeners for {args.default_listeners};"
+            #                      " Successful")
+            #         else:
+            #             err_func(f"Failure adding default listener {listener.ip_address}; "
+            #                      f"{listener.error_message}")
         elif args.format == "json" or args.format == "yaml":
             ret_str = json_format.MessageToJson(ret, indent=4,
                                                 including_default_value_fields=True,
@@ -1134,6 +1144,13 @@ class GatewayClient:
         argument("--dhchap-key",
                  "-k",
                  help="Subsystem DH-HMAC-CHAP key",
+                 required=False),
+        argument("--network-mask",
+                 help="For this subnet, automatically create listeners for this subsystem",
+                 required=False),
+        argument("--secure-listeners",
+                 help="Make all the auto-listeners for this subsystem secures",
+                 action='store_true',
                  required=False),
     ]
     subsys_del_args = [
