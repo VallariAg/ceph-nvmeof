@@ -18,6 +18,7 @@ import threading
 import hashlib
 import tempfile
 import time
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Iterator, Callable
 from collections import defaultdict
@@ -1517,7 +1518,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
         self.logger.info(
             f"Received request to create subsystem {request.subsystem_nqn}, enable_ha: "
             f"{request.enable_ha}, max_namespaces: {request.max_namespaces}, no group "
-            f"append: {request.no_group_append}, context: {context}{peer_msg}")
+            f"append: {request.no_group_append}, network mask: {request.network_mask}, "
+            f"context: {context}{peer_msg}")
 
         if not request.enable_ha:
             errmsg = f"{create_subsystem_error_prefix}: HA must be enabled for subsystems"
@@ -1722,11 +1724,71 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
 
+        if request.network_mask:
+            try:
+                rt = self.create_auto_listeners(request)
+                if rt.status == 0:
+                    return pb2.subsys_status(status=0, error_message=os.strerror(0),
+                                             nqn=request.subsystem_nqn)
+                else:
+                    error_message = f"Subsystem {request.subsystem_nqn} created successfully; " \
+                                    "Failed to create one or more NVMeoF listeners (network mask)."
+                    return pb2.subsys_status(status=rt.status, error_message=error_message,
+                                             nqn=request.subsystem_nqn)
+            except Exception:
+                errmsg = f"Created subsystem {request.subsystem_nqn}. "
+                errmsg += "An error occured when creating default listeners."
+                self.logger.exception(errmsg)
+                return pb2.subsys_status(status=errno.EINVAL,
+                                         error_message=errmsg,
+                                         nqn=request.subsystem_nqn)
         return pb2.subsys_status(status=0, error_message=os.strerror(0), nqn=request.subsystem_nqn)
 
     def create_subsystem(self, request, context=None):
         err_prefix = f"Failure creating subsystem {request.subsystem_nqn}: "
         return self.execute_grpc_function(self.create_subsystem_safe, request, context, err_prefix)
+
+    def create_auto_listeners(self, request):
+        req_status = 0
+        def _get_host_ips(subnet: str) -> list:
+            nics = NICS(self.logger, True)
+            return nics.get_ips_in_subnet(subnet)
+        network_mask_subnets = request.network_mask
+        if network_mask_subnets:
+            subnet_list = network_mask_subnets.split(",")
+            for subnet in subnet_list:
+                found_host_ips = _get_host_ips(subnet) 
+                for ip in found_host_ips:
+                    hostname = self.host_name
+                    port = os.getenv("NVMEOF_IO_PORT") or "4420"
+                    adrfam = f'ipv{ip_address(ip).version}'
+                    lstnr_req = pb2.create_listener_req(
+                        nqn=request.subsystem_nqn,
+                        host_name=hostname,
+                        adrfam=adrfam,
+                        traddr=ip,
+                        trsvcid=int(port),
+                        verify_host_name=False)
+                    rt = self.create_listener_safe(lstnr_req, None)
+                    status = rt.status
+                    # if rt.status == errno.EREMOTE:
+                    #     status = 0 (hostname mismatch)
+                    # dlistener = pb2.default_listener_status(
+                    #     status=status,
+                    #     ip_address=ip,
+                    #     error_message=(rt.error_message if status != 0 else ''),
+                    # )
+                    # created_listeners.append(dlistener)
+                    if status != 0:
+                        req_status = status
+                        errmsg = f"Failure creating auto-listeners for {request.subsystem_nqn} " \
+                                 f"subsystem: {rt.error_message}"
+                        self.logger.error(errmsg) 
+        # return (req_status, created_listeners)
+        if req_status != 0:
+            err_msg = f"Failed to create auto-listeners for subsystem {request.subsystem_nqn}"
+            return pb2.req_status(status=status, error_message=err_msg)
+        return pb2.req_status(status=0, error_message=os.strerror(0)) 
 
     def get_subsystem_namespaces(self, nqn) -> list:
         ns_list = []
@@ -5317,6 +5379,23 @@ class GatewayService(pb2_grpc.GatewayServicer):
                      f"{request.trsvcid} from {request.nqn}: "
         return self.execute_grpc_function(self.delete_listener_safe, request, context, err_prefix)
 
+    def is_active_listener(self, subsystem_nqn, listener, secure):
+        active = False
+        if subsystem_nqn in self.subsystem_listeners:
+            lookfor = (listener["adrfam"].lower(), listener["traddr"],
+                       int(listener["trsvcid"]), secure, False)
+            if lookfor in self.subsystem_listeners[subsystem_nqn]:
+                active = False
+            else:
+                lookfor = (listener["adrfam"].lower(), listener["traddr"],
+                           int(listener["trsvcid"]), secure, True)
+                if lookfor in self.subsystem_listeners[subsystem_nqn]:
+                    active = True
+                else:
+                    self.logger.warning(f"Can't find listener "
+                                        f"{listener} in local list")
+        return active
+
     def list_listeners_safe(self, request, context):
         """List listeners."""
 
@@ -5331,6 +5410,38 @@ class GatewayService(pb2_grpc.GatewayServicer):
             return pb2.listeners_info(status=errno.ENOENT, error_message=errmsg, listeners=[])
 
         listeners = []
+        pool = self.config.get("ceph", "pool")
+        group = self.config.get("gateway", "group")
+        nvmemon_listeners = self.ceph_utils.get_gw_listeners(pool, group)
+        if nvmemon_listeners:
+            subsystem_nqn = request.subsystem
+            if subsystem_nqn in nvmemon_listeners:
+                listeners_list = []
+                subsystem_listeners = nvmemon_listeners[subsystem_nqn]
+                for _listener in subsystem_listeners:
+                    # GatewayEnumUtils.get_key_from_value(
+                    # pb2.AddressFamily, _listener["address_family"]),
+                    listener = {
+                        "host_name": "test",  # TODO
+                        "adrfam": (_listener["address_family"] or '').lower(),
+                        "trsvcid": int(_listener["svcid"] or 0),
+                        "nqn": subsystem_nqn,
+                        "traddr": _listener["address"],
+                    }
+                    self.logger.info(f"VALLARI_DEBUG_1 {listener=}")
+                    secure = False  # TODO
+                    active = self.is_active_listener(subsystem_nqn, listener,
+                                                     secure=secure)
+                    one_listener = pb2.listener_info(host_name=listener["host_name"],
+                                                     trtype="TCP",
+                                                     adrfam=listener["adrfam"],
+                                                     traddr=listener["traddr"],
+                                                     trsvcid=listener["trsvcid"],
+                                                     secure=secure, active=active)
+                    listeners_list.append(one_listener)
+                return pb2.listeners_info(status=0, error_message=os.strerror(0),
+                                          listeners=listeners_list)
+
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
             state = self.gateway_state.local.get_state()
@@ -5348,20 +5459,22 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     secure = False
                     if "secure" in listener:
                         secure = listener["secure"]
-                    active = False
-                    if request.subsystem in self.subsystem_listeners:
-                        lookfor = (listener["adrfam"].lower(), listener["traddr"],
-                                   int(listener["trsvcid"]), secure, False)
-                        if lookfor in self.subsystem_listeners[request.subsystem]:
-                            active = False
-                        else:
-                            lookfor = (listener["adrfam"].lower(), listener["traddr"],
-                                       int(listener["trsvcid"]), secure, True)
-                            if lookfor in self.subsystem_listeners[request.subsystem]:
-                                active = True
-                            else:
-                                self.logger.warning(f"Can't find listener "
-                                                    f"{listener} in local list")
+                    # active = False
+                    # if request.subsystem in self.subsystem_listeners:
+                    #     lookfor = (listener["adrfam"].lower(), listener["traddr"],
+                    #                int(listener["trsvcid"]), secure, False)
+                    #     if lookfor in self.subsystem_listeners[request.subsystem]:
+                    #         active = False
+                    #     else:
+                    #         lookfor = (listener["adrfam"].lower(), listener["traddr"],
+                    #                    int(listener["trsvcid"]), secure, True)
+                    #         if lookfor in self.subsystem_listeners[request.subsystem]:
+                    #             active = True
+                    #         else:
+                    #             self.logger.warning(f"Can't find listener "
+                    #                                 f"{listener} in local list")
+                    active = self.is_active_listener(request.subsystem, listener,
+                                                     secure=secure)
                     one_listener = pb2.listener_info(host_name=listener["host_name"],
                                                      trtype="TCP",
                                                      adrfam=listener["adrfam"],
