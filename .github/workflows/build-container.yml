@@ -740,8 +740,8 @@ jobs:
         run: |
           . .env
           for image in nvmeof nvmeof-cli; do
-            docker tag quay.io/ceph/$image:$NVMEOF_VERSION quay.io/vallari/$image:default-listeners-no-context-discover-netifaces
-            docker push quay.io/vallari/$image:default-listeners-no-context-discover-netifaces
+            docker tag quay.io/ceph/$image:$NVMEOF_VERSION quay.io/vallari/$image:default-listeners-no-context-discover-netifaces-5
+            docker push quay.io/vallari/$image:default-listeners-no-context-discover-netifaces-5
           done
 
   # pull-and-run-images:

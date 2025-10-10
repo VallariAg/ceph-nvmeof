@@ -1781,12 +1781,14 @@ class GatewayService(pb2_grpc.GatewayServicer):
         def _get_host_ips(subnet: str) -> list:
             nics = NICS(self.logger, True)
             return nics.get_ips_in_subnet(subnet)
+        self.logger.info("VALLARI_DEBUG: creating auto-listeners...")
         req_status = 0
         network_mask_subnets = request.network_mask
         if network_mask_subnets:
             subnet_list = network_mask_subnets.split(",")
             for subnet in subnet_list:
                 found_host_ips = _get_host_ips(subnet)
+                self.logger.info(f"VALLARI_DEBUG 2: {found_host_ips=}")
                 for ip in found_host_ips:
                     hostname = self.host_name
                     port = os.getenv("NVMEOF_IO_PORT") or "4420"
@@ -5514,47 +5516,55 @@ class GatewayService(pb2_grpc.GatewayServicer):
             except Exception:
                 self.logger.exception(f"Got exception while parsing {val}")
                 continue
-
+        self.logger.info(f"VALLARI_DEBUG 1: omap listeners {listeners=}")
         try:
             pool = self.config.get("ceph", "pool")
             group = self.config.get("gateway", "group")
             nvmemon_listeners = self.ceph_utils.get_gw_listeners(pool, group)
             if request.subsystem in nvmemon_listeners:
+                self.logger.info("VALLARI_DEBUG 2: subsystem found!")
                 subsystem_listeners = nvmemon_listeners[request.subsystem]
-                subsys_key_key = GatewayState.build_subsystem_key_key(request.subsystem)
-                for key, val in state.items():
-                    if key.startswith(subsys_key_key):
-                        subsystem = json.loads(val)
-                        self.logger.info(f"VALLARI_DEBUG {subsystem=}")
-                        if 'network_mask' in subsystem:
-                            secure = subsystem.get('secure_listeners', False)
-                            for _listener in subsystem_listeners:
-                                listener_key = (_listener["traddr"], _listener["trsvcid"],
-                                                secure)
-                                if listener_key in omap_listeners:
-                                    continue
-                                listener = {
-                                    "host_name": "test",  # TODO
-                                    "adrfam": (_listener["address_family"] or '').lower(),
-                                    "trsvcid": int(_listener["svcid"] or 0),
-                                    "nqn": request.subsystem,
-                                    "traddr": _listener["address"],
-                                }
-                                self.logger.info(f"VALLARI_DEBUG_1 {listener=}")
-                                active = self._is_active_listener(request.subsystem,
-                                                                  listener, secure=secure)
-                                one_listener = pb2.listener_info(
-                                    host_name=listener["host_name"],
-                                    trtype="TCP",
-                                    adrfam=listener["adrfam"],
-                                    traddr=listener["traddr"],
-                                    trsvcid=listener["trsvcid"],
-                                    secure=secure, active=active)
-                                listeners.append(one_listener)
+                # try:
+                subsys_key = GatewayState.build_subsystem_key(request.subsystem)
+                state_subsys = state[subsys_key]
+                subsystem = json.loads(state_subsys)
+                # except Exception:
+                #     errmsg = f"Listener list failed: Can't find entry for subsystem " \
+                #              f"{request.subsystem_nqn}"
+                #     self.logger.error(errmsg)
+                #     return pb2.listeners_info(status=0, error_message=errmsg, listeners=listeners)
+
+                self.logger.info(f"VALLARI_DEBUG 4: {subsystem=}")
+                if subsystem and 'network_mask' in subsystem:
+                    secure = subsystem.get('secure_listeners', False)
+                    self.logger.info(f"VALLARI_DEBUG 4: auto-listenerrr subsystem {secure=}")
+                    for _listener in subsystem_listeners:
+                        listener = {
+                            "host_name": "test",  # TODO
+                            "adrfam": (_listener["address_family"] or '').lower(),
+                            "trsvcid": int(_listener["svcid"] or 0),
+                            "nqn": request.subsystem,
+                            "traddr": _listener["address"],
+                        }
+                        self.logger.info(f"VALLARI_DEBUG 5 {listener=}")
+                        listener_key = (listener["traddr"], listener["trsvcid"],
+                                        secure)
+                        if listener_key in omap_listeners:
+                            continue
+                        self.logger.info(f"VALLARI_DEBUG 6 auto-listener : {listener_key=}")
+                        active = self._is_active_listener(request.subsystem,
+                                                          listener, secure=secure)
+                        one_listener = pb2.listener_info(
+                            host_name=listener["host_name"],
+                            trtype="TCP",
+                            adrfam=listener["adrfam"],
+                            traddr=listener["traddr"],
+                            trsvcid=listener["trsvcid"],
+                            secure=secure, active=active)
+                        listeners.append(one_listener)
         except Exception as e:
-            errmsg = "Failure listing listeners: a problem occurred when displaying listener" \
-                     "info from 'nvme-gw listeners' cmd"
-            self.logger.error(f'{errmsg}: {e}')
+            errmsg = "Failure when displaying listener info from 'nvme-gw listeners' cmd"
+            self.logger.exception(f'{errmsg}: {e}')
             return pb2.listeners_info(status=errno.EINVAL, error_message=errmsg,
                                       listeners=listeners)
 
