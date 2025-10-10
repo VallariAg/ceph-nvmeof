@@ -5519,7 +5519,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                         subsystem = json.loads(val)
                         self.logger.info(f"VALLARI_DEBUG {subsystem=}")
                         if 'network_mask' in subsystem:
-                            secure = 'secure_listeners' in subsystem
+                            secure = subsystem.get('secure_listeners', False)
                             for _listener in subsystem_listeners:
                                 listener_key = (_listener["traddr"], _listener["trsvcid"],
                                                 secure)
