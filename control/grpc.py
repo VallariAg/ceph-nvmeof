@@ -5430,16 +5430,24 @@ class GatewayService(pb2_grpc.GatewayServicer):
         return self.execute_grpc_function(self.delete_listener_safe, request, context, err_prefix)
 
     def _is_active_listener(self, subsystem_nqn, listener, secure):
+        try:
+            adrfam = listener["adrfam"]
+            if isinstance(adrfam, int):
+                adrfam = GatewayEnumUtils.get_key_from_value(pb2.AddressFamily, adrfam)
+        except KeyError:
+            adrfam = GatewayEnumUtils.get_key_from_value(pb2.AddressFamily, 0)
+            self.logger.debug(f"Missing adrfam in entry use default value: {adrfam}")
+        adrfam = adrfam.lower()
         active = False
         if subsystem_nqn in self.subsystem_listeners:
             traddr = GatewayUtils.unescape_address_if_ipv6(listener["traddr"], adrfam)
             lookfor = (adrfam, traddr,
-                        int(listener["trsvcid"]), secure, False)
+                       int(listener["trsvcid"]), secure, False)
             if lookfor in self.subsystem_listeners[subsystem_nqn]:
                 active = False
             else:
                 lookfor = (adrfam, traddr,
-                            int(listener["trsvcid"]), secure, True)
+                           int(listener["trsvcid"]), secure, True)
                 if lookfor in self.subsystem_listeners[subsystem_nqn]:
                     active = True
                 else:
@@ -5493,13 +5501,13 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 #             self.logger.warning(f"Can't find listener "
                 #                                 f"{listener} in local list")
                 active = self._is_active_listener(request.subsystem, listener,
-                                                    secure=secure)
+                                                  secure=secure)
                 one_listener = pb2.listener_info(host_name=listener["host_name"],
-                                                    trtype="TCP",
-                                                    adrfam=listener["adrfam"],
-                                                    traddr=listener["traddr"],
-                                                    trsvcid=listener["trsvcid"],
-                                                    secure=secure, active=active)
+                                                 trtype="TCP",
+                                                 adrfam=listener["adrfam"],
+                                                 traddr=listener["traddr"],
+                                                 trsvcid=listener["trsvcid"],
+                                                 secure=secure, active=active)
                 listeners.append(one_listener)
                 listener_key = (listener["traddr"], listener["trsvcid"], secure)
                 omap_listeners.add(listener_key)
@@ -5534,7 +5542,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                 }
                                 self.logger.info(f"VALLARI_DEBUG_1 {listener=}")
                                 active = self._is_active_listener(request.subsystem,
-                                                                    listener, secure=secure)
+                                                                  listener, secure=secure)
                                 one_listener = pb2.listener_info(
                                     host_name=listener["host_name"],
                                     trtype="TCP",
@@ -5545,10 +5553,10 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                 listeners.append(one_listener)
         except Exception as e:
             errmsg = "Failure listing listeners: a problem occurred when displaying listener" \
-                        "info from 'nvme-gw listeners' cmd"
+                     "info from 'nvme-gw listeners' cmd"
             self.logger.error(f'{errmsg}: {e}')
             return pb2.listeners_info(status=errno.EINVAL, error_message=errmsg,
-                                        listeners=listeners)
+                                      listeners=listeners)
 
         return pb2.listeners_info(status=0, error_message=os.strerror(0), listeners=listeners)
 
