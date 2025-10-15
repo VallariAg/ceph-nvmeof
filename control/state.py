@@ -1497,6 +1497,10 @@ class GatewayStateHandler:
                 ns_trash_image_changed = []
                 only_host_key_changed = []
                 only_subsystem_key_changed = []
+                # Possible solution: during update(), if subsystem has "network_mask" then
+                # collect a list of auto-listeners to be created later with "subsystem update-network-mask" cmd. 
+                # Process that list after namespaces are created. 
+                auto_listener_add = []
                 for key in changed.keys():
                     if key.startswith(GatewayState.NAMESPACE_PREFIX):
                         old_req = self._parse_namespace_req(local_state_dict[key])
@@ -1550,6 +1554,15 @@ class GatewayStateHandler:
                             only_subsystem_key_changed.append((key,
                                                                new_dhchap_key,
                                                                new_key_encrypted))
+                        # not sure if this is the right place yet
+                        subsystem = (omap_state_dict[key]) # TODO: somehow access subsystem req
+                        if subsystem.network_mask:
+                            auto_listener_add += [{
+                                "subsystem": subsystem.nqn,
+                                "network_mask": subsystem.network_mask, 
+                                "secure_listeners": subsystem.secure_listeners
+                            }]
+
 
                 for ns_key, new_lb_grp in ns_lb_group_changed:
                     ns_nqn = None
@@ -1698,6 +1711,8 @@ class GatewayStateHandler:
                         prefix_list += [GatewayState.NAMESPACE_TRASH_IMAGE_PREFIX]
                     if len(only_host_key_changed) > 0:
                         prefix_list += [GatewayState.HOST_KEY_PREFIX]
+                    if len(auto_listener_add) > 0:
+                        prefix_list += [GatewayState.SUBSYSTEM_NETWORK_MASK_UPDATE]
                     grouped_added = self._group_by_prefix(added, prefix_list)
 
                 # Find OMAP removals

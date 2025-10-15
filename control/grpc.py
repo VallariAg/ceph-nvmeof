@@ -1752,7 +1752,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     return pb2.subsys_status(status=errno.EINVAL,
                                              error_message=errmsg, nqn=request.subsystem_nqn)
 
-        if request.network_mask:
+        if request.network_mask and context: 
+            # why context? so auto-listeners for other gateways are not created here when 
+            # update() runs, they would be created by "subsystem network_mask_update" cmd later by update() method
             try:
                 rt = self.create_auto_listeners(request)
                 if rt.status == 0:
