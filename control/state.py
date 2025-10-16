@@ -34,7 +34,7 @@ class GatewayState(ABC):
     OMAP_KEY_DELIMITER = "_"
     NAMESPACE_PREFIX = "namespace" + OMAP_KEY_DELIMITER
     SUBSYSTEM_PREFIX = "subsystem" + OMAP_KEY_DELIMITER
-    SUBSYSTEM_NETWORK_MASK = "subsystem-network-mask" + OMAP_KEY_DELIMITER
+    SUBSYSTEM_NETWORK_MASK = "network-mask-subsystem" + OMAP_KEY_DELIMITER
     SUBSYSTEM_KEY_PREFIX = "key-subsystem" + OMAP_KEY_DELIMITER
     HOST_PREFIX = "host" + OMAP_KEY_DELIMITER
     HOST_KEY_PREFIX = "key-host" + OMAP_KEY_DELIMITER
@@ -1565,7 +1565,10 @@ class GatewayStateHandler:
                             only_subsystem_key_changed.append((key,
                                                                new_dhchap_key,
                                                                new_key_encrypted))
+                for key in added.keys():
+                    if key.startswith(GatewayState.SUBSYSTEM_PREFIX):
                         subsystem = self._parse_subsystem_req(omap_state_dict[key])
+                        self.logger.info(f"VALLARI_DEBUG 0: {subsystem}")
                         if subsystem.network_mask:
                             auto_listener_add.append(subsystem)
                 for ns_key, new_lb_grp in ns_lb_group_changed:
@@ -1699,17 +1702,20 @@ class GatewayStateHandler:
                         except Exception:
                             self.logger.exception("Exception formatting change subsystem "
                                                   "key request")
+                self.logger.info(f"VALLARI_DEBUG 1: {auto_listener_add=}")
                 for subsystem_req in auto_listener_add:
                     subsystem_nqn = subsystem_req.subsystem_nqn
                     autolistener_key = GatewayState.build_subsystem_network_mask_key(subsystem_nqn)
+                    self.logger.info(f"VALLARI_DEBUG 1.1: {autolistener_key=}")
                     json_req = json_format.MessageToJson(subsystem_req)
                     added[autolistener_key] = json_req
                 if len(ns_lb_group_changed) > 0 or len(only_host_key_changed) > 0 or \
                    len(only_subsystem_key_changed) > 0 or len(ns_visibility_changed) > 0 or \
-                   len(ns_trash_image_changed) > 0:
+                   len(ns_trash_image_changed) > 0 or len(auto_listener_add) > 0:
                     grouped_changed = self._group_by_prefix(changed, prefix_list)
 
                     if len(auto_listener_add) > 0:
+                        self.logger.info("VALLARI_DEBUG 1.5: here!!")
                         prefix_list += [GatewayState.SUBSYSTEM_NETWORK_MASK]
                     if len(only_subsystem_key_changed) > 0:
                         prefix_list += [GatewayState.SUBSYSTEM_KEY_PREFIX]
@@ -1727,6 +1733,10 @@ class GatewayStateHandler:
                 removed_keys = local_state_keys - omap_state_keys
                 removed = {key: local_state_dict[key] for key in removed_keys}
                 grouped_removed = self._group_by_prefix(removed, prefix_list)
+
+                if GatewayState.SUBSYSTEM_NETWORK_MASK in grouped_added:
+                    a = grouped_added[GatewayState.SUBSYSTEM_NETWORK_MASK]
+                    self.logger.info(f'VALLARI_DEBUG 1.6: {a}')
 
                 # Handle OMAP removals and remove outdated changed components
                 grouped_removed.update(grouped_changed)
@@ -1758,6 +1768,8 @@ class GatewayStateHandler:
         if is_add_req:
             for prefix in prefix_list:
                 component_update = grouped_state_update.get(prefix, {})
+                if prefix == GatewayState.SUBSYSTEM_NETWORK_MASK:
+                    self.logger.info(f"VALLARI_DEBUG 1.7: {component_update}")
                 if component_update:
                     self.gateway_rpc_caller(component_update, True, self.break_update_interval)
         else:

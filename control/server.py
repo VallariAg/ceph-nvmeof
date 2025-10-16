@@ -351,8 +351,8 @@ class GatewayServer:
             "daemon_type": "gateway",          # "nvmeof: 3 <daemon_type> active (3 hosts)"
             "group": self.config.get_with_default("gateway", "group", ""),
         }
-        metadata["id"] = metadata["id"].removeprefix(
-            f"{metadata['pool_name']}.{metadata['group']}.")
+        # metadata["id"] = metadata["id"].removeprefix(
+        #     f"{metadata['pool_name']}.{metadata['group']}.")
         self.ceph_utils.service_daemon_register(conn, metadata)
 
     def _monitor_client_version(self) -> str:
@@ -1050,8 +1050,14 @@ class GatewayServer:
     def gateway_rpc_caller(self, requests, is_add_req, break_interval):
         """Passes RPC requests to gateway service."""
         start_time = 0
+        self.logger.info(f"VALLARI_DEBUG 2.1: {requests=}")
+        for key, val in requests.items():
+            if key.startswith(GatewayState.SUBSYSTEM_NETWORK_MASK):
+                self.logger.info(
+                    f"VALLARI_DEBUG 2.2: we can parse through this! {key=}")
         for key, val in requests.items():
             start_time = self._sleep_if_needed(break_interval, start_time)
+            self.logger.info(f"VALLARI_DEBG 2.3: {key}")
             if key.startswith(GatewayState.SUBSYSTEM_PREFIX):
                 if is_add_req:
                     req = json_format.Parse(val, pb2.create_subsystem_req(),
@@ -1079,6 +1085,8 @@ class GatewayServer:
                                             ignore_unknown_fields=True)
                     self.gateway_rpc.delete_subsystem(req)
             elif key.startswith(GatewayState.SUBSYSTEM_NETWORK_MASK):
+                self.logger.info(
+                    f"VALLARI_DEBUG 2.5: found the key in server! {key=} {is_add_req=}")
                 if is_add_req:
                     req = json_format.Parse(val,
                                             pb2.create_subsystem_req(),

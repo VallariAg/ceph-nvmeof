@@ -1754,7 +1754,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
 
         if request.network_mask and context:
             try:
-                rt = self.create_auto_listeners(request)
+                rt = self.create_auto_listeners_safe(request)
                 if rt.status == 0:
                     return pb2.subsys_status(status=0, error_message=os.strerror(0),
                                              nqn=request.subsystem_nqn)
@@ -1776,17 +1776,19 @@ class GatewayService(pb2_grpc.GatewayServicer):
         err_prefix = f"Failure creating subsystem {request.subsystem_nqn}: "
         return self.execute_grpc_function(self.create_subsystem_safe, request, context, err_prefix)
 
-    def create_auto_listeners(self, request):
+    def create_auto_listeners_safe(self, request, context=None):
 
         def _get_host_ips(subnet: str) -> list:
             nics = NICS(self.logger, True)
             return nics.get_ips_in_subnet(subnet)
+        self.logger.info(f"VALLARI_DEBUG 3: {request=}")
         req_status = 0
         network_mask_subnets = request.network_mask
         if network_mask_subnets:
             subnet_list = network_mask_subnets.split(",")
             for subnet in subnet_list:
                 found_host_ips = _get_host_ips(subnet)
+                self.logger.info(f"VALLARI_DEBUG 3.5: {found_host_ips=}")
                 for ip in found_host_ips:
                     hostname = self.host_name
                     port = os.getenv("NVMEOF_IO_PORT") or "4420"
@@ -1802,6 +1804,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                         verify_host_name=False)
                     rt = self.create_listener_safe(lstnr_req, None)
                     status = rt.status
+                    self.logger.info(f"VALLARI_DEBUG 4: {status=}")
                     if status != 0:
                         req_status = status
                         errmsg = f"Failure creating auto-listeners for {request.subsystem_nqn} " \
@@ -1811,6 +1814,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
             err_msg = f"Failed to create auto-listeners for subsystem {request.subsystem_nqn}"
             return pb2.req_status(status=status, error_message=err_msg)
         return pb2.req_status(status=0, error_message=os.strerror(0))
+
+    def create_auto_listeners(self, request):
+        return self.execute_grpc_function(self.create_auto_listeners_safe, request, context=None)
 
     def get_subsystem_namespaces(self, nqn) -> list:
         ns_list = []
@@ -5497,6 +5503,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
             if request.subsystem in nvmemon_listeners:
                 subsystem_listeners = nvmemon_listeners[request.subsystem]
                 subsys_key = GatewayState.build_subsystem_key(request.subsystem)
+                if subsys_key not in state:
+                    err_msg = (f"Subsystem {request.subsystem} not found in local gateway state")
+                    raise RuntimeError(err_msg)
                 state_subsys = state[subsys_key]
                 subsystem = json.loads(state_subsys)
                 if subsystem and 'network_mask' in subsystem:
@@ -5527,8 +5536,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
                             secure=secure, active=active)
                         listeners.append(one_listener)
         except Exception as e:
-            errmsg = "Failure when displaying listener info from 'nvme-gw listeners' cmd"
-            self.logger.exception(f'{errmsg}: {e}')
+            errmsg = f"Failure when displaying listener info from 'nvme-gw listeners' cmd: {e}"
+            self.logger.exception(errmsg)
             return pb2.listeners_info(status=errno.EINVAL, error_message=errmsg,
                                       listeners=listeners)
 
