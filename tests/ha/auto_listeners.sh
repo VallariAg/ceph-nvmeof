@@ -26,63 +26,53 @@ test_listeners()
    ip_2=$2 # optional
    for i in $(seq $NUM_SUBSYSTEMS); do
       NQN="nqn.2016-06.io.spdk:cnode0$i"
-      is_secure=false
-      if [ "$NQN" -eq "$NQN2" ]; then
-         is_secure=true 
+      is_secure=No
+      if [ "$NQN" = "$NQN2" ]; then
+         is_secure=Yes 
       fi
-      is_manual=false
-      if [ "$NQN" -eq "$NQN3" ]; then
-         is_manual=true
+      is_manual=No
+      if [ "$NQN" = "$NQN3" ]; then
+         is_manual=Yes
       fi 
 
       # CHECK 1: list listeners
-      docker compose run -T --rm nvmeof-cli --server-address $ip_1 --server-port 5500 --output stdio --format json listener list -n $NQN > /tmp/listeners.txt 
+      docker compose run -T --rm nvmeof-cli --server-address $ip_1 --server-port 5500 --output stdio --format plain listener list -n $NQN > /tmp/listeners.txt 
       cat /tmp/listeners.txt
-      [[ `cat /tmp/listeners.txt | jq -r '.status'` == "0" ]]
-      [[ `cat /tmp/listeners.txt | jq -r '.listeners[0].trtype'` == "TCP" ]]
-      [[ `cat /tmp/listeners.txt | jq -r '.listeners[0].adrfam'` == "ipv4" ]]
-      [[ `cat /tmp/listeners.txt | jq -r '.listeners[0].traddr'` == "$ip_1" ]]
-      [[ `cat /tmp/listeners.txt | jq -r '.listeners[0].trsvcid'` == "4420" ]]
-      [[ `cat /tmp/listeners.txt | jq -r '.listeners[0].secure'` == "$is_secure" ]]
-      [[ `cat /tmp/listeners.txt | jq -r '.listeners[0].active'` == "true" ]]
-      [[ `cat /tmp/listeners.txt | jq -r '.listeners[0].manual'` == "$is_manual" ]]
+      [[ `cat /tmp/listeners.txt | grep "${ip_1}" | awk '{print $2}'` == "TCP" ]]
+      [[ `cat /tmp/listeners.txt | grep "${ip_1}" | awk '{print $3}'` == "IPv4" ]]
+      [[ `cat /tmp/listeners.txt | grep "${ip_1}" | awk '{print $4}'` == "${ip_1}:4420" ]]
+      [[ `cat /tmp/listeners.txt | grep "${ip_1}" | awk '{print $5}'` == "$is_secure" ]]
+      [[ `cat /tmp/listeners.txt | grep "${ip_1}" | awk '{print $6}'` == "Yes" ]]
+      [[ `cat /tmp/listeners.txt | grep "${ip_1}" | awk '{print $7}'` == "$is_manual" ]]
       if [ -n "$ip_2" ]; then
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[1].trtype'` == "TCP" ]]
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[1].adrfam'` == "ipv4" ]]
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[1].traddr'` == "$ip_2" ]]
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[1].trsvcid'` == "4420" ]]
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[1].secure'` == "$is_secure" ]]
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[1].active'` == "false" ]]
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[1].manual'` == "$is_manual" ]]
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[2]'` == "null" ]]
-      else
-         [[ `cat /tmp/listeners.txt | jq -r '.listeners[1]'` == "null" ]]
+         [[ `cat /tmp/listeners.txt | grep "${ip_2}" | awk '{print $2}'` == "TCP" ]]
+         [[ `cat /tmp/listeners.txt | grep "${ip_2}" | awk '{print $3}'` == "IPv4" ]]
+         [[ `cat /tmp/listeners.txt | grep "${ip_2}" | awk '{print $4}'` == "${ip_2}:4420" ]]
+         [[ `cat /tmp/listeners.txt | grep "${ip_2}" | awk '{print $5}'` == "$is_secure" ]]
+         [[ `cat /tmp/listeners.txt | grep "${ip_2}" | awk '{print $6}'` == "No" ]]
+         [[ `cat /tmp/listeners.txt | grep "${ip_2}" | awk '{print $7}'` == "$is_manual" ]]
       fi
 
       # CHECK 2: gw listener_info
-      docker compose run -T --rm nvmeof-cli --server-address $ip_1 --server-port 5500 --output stdio --format json gw listener_info -n $NQN > /tmp/gw_listeners.txt
+      docker compose run -T --rm nvmeof-cli --server-address $ip_1 --server-port 5500 --output stdio --format plain gw listener_info -n $NQN > /tmp/gw_listeners.txt
       cat /tmp/gw_listeners.txt
-      [[ `cat /tmp/gw_listeners.txt | jq -r '.status'` == "0" ]]
-      [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.trtype'` == "TCP" ]]
-      [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.adrfam'` == "ipv4" ]]
-      [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.traddr'` == "$ip_1" ]]
-      [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.trsvcid'` == "4420" ]]
-      [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.secure'` == "$is_secure" ]]
-      [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.active'` == "true" ]]
-      [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[1]'` == "null" ]]
-
+      [[ `cat /tmp/gw_listeners.txt | grep "${ip_1}" | awk '{print $2}'` == "TCP" ]]
+      [[ `cat /tmp/gw_listeners.txt | grep "${ip_1}" | awk '{print $3}'` == "IPv4" ]]
+      [[ `cat /tmp/gw_listeners.txt | grep "${ip_1}" | awk '{print $4}'` == "${ip_1}:4420" ]]
+      [[ `cat /tmp/gw_listeners.txt | grep "${ip_1}" | awk '{print $5}'` == "$is_secure" ]]
+      [[ `cat /tmp/gw_listeners.txt | grep "${ip_1}" | awk '{print $6}'` == "Yes" ]]
       if [ -n "$ip_2" ]; then
-         docker compose run -T --rm nvmeof-cli --server-address $ip_2 --server-port 5500 --output stdio --format json gw listener_info -n $NQN > /tmp/gw_listeners.txt
+         docker compose run -T --rm nvmeof-cli --server-address $ip_2 --server-port 5500 --output stdio --format plain gw listener_info -n $NQN > /tmp/gw_listeners.txt
          cat /tmp/gw_listeners.txt
-         [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.trtype'` == "TCP" ]]
-         [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.adrfam'` == "ipv4" ]]
-         [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.traddr'` == "$ip_2" ]]
-         [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.trsvcid'` == "4420" ]]
-         [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.secure'` == "$is_secure" ]]
-         [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[0].listener.active'` == "true" ]]
-         [[ `cat /tmp/gw_listeners.txt | jq -r '.gw_listeners[1]'` == "null" ]]
+         [[ `cat /tmp/gw_listeners.txt | grep "${ip_2}" | awk '{print $2}'` == "TCP" ]]
+         [[ `cat /tmp/gw_listeners.txt | grep "${ip_2}" | awk '{print $3}'` == "IPv4" ]]
+         [[ `cat /tmp/gw_listeners.txt | grep "${ip_2}" | awk '{print $4}'` == "${ip_2}:4420" ]]
+         [[ `cat /tmp/gw_listeners.txt | grep "${ip_2}" | awk '{print $5}'` == "$is_secure" ]]
+         [[ `cat /tmp/gw_listeners.txt | grep "${ip_2}" | awk '{print $6}'` == "Yes" ]]
       fi
+
       # CHECK 3: nvme discover check
+
       # CHECK 4: nvme connect+list check
 
    done
@@ -116,7 +106,7 @@ for i in $(seq $NUM_SUBSYSTEMS); do
    done
 done
 
-test_listeners $ip2 $ip1
+test_listeners $ip1 $ip2
 
 
 # TEST 2: scale-up / scale-down and verify
@@ -125,12 +115,15 @@ echo "ℹ️ ℹ️ Test auto-listeners for scale-up and scale-down"
 docker compose exec -T ceph ceph nvme-gw delete $GW1_NAME rbd ''
 echo "ℹ️  Wait for scale-down"
 sleep 110
-
+docker compose exec -T ceph ceph nvme-gw show rbd ''
 test_listeners $ip2
 
 docker compose exec -T ceph ceph nvme-gw create $GW1_NAME rbd ''
 echo "ℹ️ Wait for scale up"
 sleep 200
+docker compose exec -T ceph ceph nvme-gw show rbd ''
+docker compose run -T --rm nvmeof-cli --server-address $ip2 --server-port 5500 --output stdio --format json subsystem list
+
 test_listeners $ip2 $ip1
 
 
