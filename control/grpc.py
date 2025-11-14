@@ -5880,9 +5880,11 @@ class GatewayService(pb2_grpc.GatewayServicer):
             state_subsys = state[subsys_key]
             subsystem = json.loads(state_subsys)
             if subsystem and 'network_mask' in subsystem:
-                pool = self.config.get("ceph", "pool")
-                group = self.config.get("gateway", "group")
+                pool = self.config.get_with_default("ceph", "pool", "")
+                group = self.config.get_with_default("gateway", "group", "")
                 nvmemon_listeners = self.ceph_utils.get_gw_listeners(pool, group)
+                self.logger.info("VALLARI_DEBUG: nvmemon_listeners")
+                self.logger.info(nvmemon_listeners)
                 if request.subsystem in nvmemon_listeners:
                     subsystem_listeners = nvmemon_listeners[request.subsystem]
                     secure = subsystem.get('secure_listeners', False)

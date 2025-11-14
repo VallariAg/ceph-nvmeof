@@ -1596,6 +1596,8 @@ class TestCreate:
     def test_list_listeners_auto_ipv4(self, caplog, gateway):
         caplog.clear()
         listeners = cli_test(["listener", "list", "--subsystem", subsystem16])
+        print("listeners for subsystem16")
+        print(listeners)
         assert listeners.status == 0
         assert listeners.listeners[0].host_name == host_name
         assert listeners.listeners[0].traddr == addr
@@ -1606,6 +1608,8 @@ class TestCreate:
         assert not listeners.listeners[0].manual
 
         caplog.clear()
+        print("listeners for subsystem17")
+        print(listeners)
         listeners = cli_test(["listener", "list", "--subsystem", subsystem17])
         assert listeners.listeners[1].host_name == host_name
         assert listeners.listeners[1].traddr == addr

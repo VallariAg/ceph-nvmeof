@@ -61,6 +61,7 @@ class CephUtils:
             str = '{' + f'"prefix":"nvme-gw listeners", "pool":"{pool}", "group":"{group}"' + '}'
             self.logger.debug(f"nvme-listeners string: {str}")
             rply = self.execute_ceph_monitor_command(str)
+            self.logger.info(f"VALLARI_DEBUG: '{pool}' '{group}' {rply}")
             self.logger.debug(f"reply \"{rply}\"")
             conv_str = rply[1].decode()
             data = json.loads(conv_str)

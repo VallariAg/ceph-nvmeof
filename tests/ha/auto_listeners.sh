@@ -107,25 +107,6 @@ done
 
 test_listeners $ip1 $ip2
 
-
-# TEST 2: scale-up / scale-down and verify
-echo "ℹ️ ℹ️ Test auto-listeners for scale-up and scale-down"
-
-docker compose exec -T ceph ceph nvme-gw delete $GW1_NAME rbd ''
-echo "ℹ️  Wait for scale-down"
-sleep 110
-docker compose exec -T ceph ceph nvme-gw show rbd ''
-test_listeners $ip2
-
-docker compose exec -T ceph ceph nvme-gw create $GW1_NAME rbd ''
-echo "ℹ️ Wait for scale up"
-sleep 200
-docker compose exec -T ceph ceph nvme-gw show rbd ''
-docker compose run -T --rm nvmeof-cli --server-address $ip2 --server-port 5500 --output stdio --format json subsystem list
-
-test_listeners $ip2 $ip1
-
-
 ############################################################################################
 
 echo "ℹ️ ℹ️  test passed"

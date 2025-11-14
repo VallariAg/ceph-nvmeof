@@ -750,8 +750,8 @@ class DiscoveryService:
             self.logger.error("Error getting current state.")
             return -1
         listeners = self._get_vals(my_omap_dict, GatewayState.LISTENER_PREFIX)
-        pool = self.config.get("ceph", "pool")
-        group = self.config.get("gateway", "group")
+        pool = self.config.get_with_default("ceph", "pool", "")
+        group = self.config.get_with_default("gateway", "group", "")
         nvmemon_listeners = self.ceph_utils.get_gw_listeners(pool, group)
         hosts = self._get_vals(my_omap_dict, GatewayState.HOST_PREFIX)
         if len(self_conn.nvmeof_connect_data_hostnqn) != 256:
