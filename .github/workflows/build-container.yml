@@ -102,134 +102,135 @@ jobs:
           path: |
             ceph.tar
 
-  # pytest:
-  #   needs: [build, build-ceph]
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       test: ["cli", "cli_change_lb", "cli_change_keys", "cli_change_ns_visibility", "cli_change_ns_location", "cli_trash_rbd", "state", "multi_gateway", "server", "grpc", "omap_lock", "log_files", "nsid", "psk", "dhchap", "subsys_grp_name_append", "max_subsystems", "omap_no_read_lock", "omap_read_lock", "omap_read_lock_ignore_errors", "big_omap", "ns_limit", "cli_force_tls", "erasure_pool"]
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     HUGEPAGES: 512  # for multi gateway test, approx 256 per gateway instance
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+  pytest:
+    needs: [build, build-ceph]
+    strategy:
+      fail-fast: false
+      matrix:
+        # test: ["cli", "cli_change_lb", "cli_change_keys", "cli_change_ns_visibility", "cli_change_ns_location", "cli_trash_rbd", "state", "multi_gateway", "server", "grpc", "omap_lock", "log_files", "nsid", "psk", "dhchap", "subsys_grp_name_append", "max_subsystems", "omap_no_read_lock", "omap_read_lock", "omap_read_lock_ignore_errors", "big_omap", "ns_limit", "cli_force_tls", "erasure_pool"]
+        test: ["cli"]
+    runs-on: ubuntu-latest
+    env:
+      HUGEPAGES: 512  # for multi gateway test, approx 256 per gateway instance
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  #     - name: Setup huge pages
-  #       run: |
-  #         make setup HUGEPAGES=$HUGEPAGES
+      - name: Setup huge pages
+        run: |
+          make setup HUGEPAGES=$HUGEPAGES
 
-  #     - name: Download container images
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: container_images*
-  #         merge-multiple: true
+      - name: Download container images
+        uses: actions/download-artifact@v4
+        with:
+          pattern: container_images*
+          merge-multiple: true
 
-  #     - name: Load container images
-  #       run: |
-  #         docker load < nvmeof.tar
-  #         docker load < ceph.tar
+      - name: Load container images
+        run: |
+          docker load < nvmeof.tar
+          docker load < ceph.tar
 
-  #     - name: Clear space on disk
-  #       run: |
-  #         if [[ -d /usr/share/dotnet ]]; then
-  #           /usr/bin/du -sh /usr/share/dotnet
-  #           rm -rf /usr/share/dotnet
-  #         fi
-  #         if [[ -d /opt/ghc ]]; then
-  #           /usr/bin/du -sh /opt/ghc
-  #           rm -rf /opt/ghc
-  #         fi
-  #         if [[ -d /usr/local/share/boost ]]; then
-  #           /usr/bin/du -sh /usr/local/share/boost
-  #           rm -rf /usr/local/share/boost
-  #         fi
-  #         if [[ -n "$AGENT_TOOLSDIRECTORY" ]]; then
-  #           if [[ -d "$AGENT_TOOLSDIRECTORY" ]]; then
-  #             /usr/bin/du -sh "$AGENT_TOOLSDIRECTORY"
-  #             rm -rf "$AGENT_TOOLSDIRECTORY"
-  #           fi
-  #         fi
+      - name: Clear space on disk
+        run: |
+          if [[ -d /usr/share/dotnet ]]; then
+            /usr/bin/du -sh /usr/share/dotnet
+            rm -rf /usr/share/dotnet
+          fi
+          if [[ -d /opt/ghc ]]; then
+            /usr/bin/du -sh /opt/ghc
+            rm -rf /opt/ghc
+          fi
+          if [[ -d /usr/local/share/boost ]]; then
+            /usr/bin/du -sh /usr/local/share/boost
+            rm -rf /usr/local/share/boost
+          fi
+          if [[ -n "$AGENT_TOOLSDIRECTORY" ]]; then
+            if [[ -d "$AGENT_TOOLSDIRECTORY" ]]; then
+              /usr/bin/du -sh "$AGENT_TOOLSDIRECTORY"
+              rm -rf "$AGENT_TOOLSDIRECTORY"
+            fi
+          fi
 
-  #     - name: Start ceph cluster
-  #       run: |
-  #         docker compose version
-  #         docker compose up -d ceph
+      - name: Start ceph cluster
+        run: |
+          docker compose version
+          docker compose up -d ceph
 
-  #     - name: Wait for the ceph cluster container to become healthy
-  #       timeout-minutes: 3
-  #       run: |
-  #         while true; do
-  #           container_status=$(docker inspect --format='{{.State.Health.Status}}' ceph)
-  #           if [[ $container_status == "healthy" ]]; then
-  #             # success
-  #             exit 0
-  #           else
-  #             # Wait for a specific time before checking again
-  #             sleep ${{ env.WAIT_INTERVAL_SECS }}
-  #             echo -n .
-  #           fi
-  #         done
+      - name: Wait for the ceph cluster container to become healthy
+        timeout-minutes: 3
+        run: |
+          while true; do
+            container_status=$(docker inspect --format='{{.State.Health.Status}}' ceph)
+            if [[ $container_status == "healthy" ]]; then
+              # success
+              exit 0
+            else
+              # Wait for a specific time before checking again
+              sleep ${{ env.WAIT_INTERVAL_SECS }}
+              echo -n .
+            fi
+          done
 
-  #     - name: Create RBD image
-  #       run: |
-  #         echo "💁 ceph create pools:"
-  #         make exec SVC=ceph OPTS="-T" CMD="ceph osd pool create rbd"
-  #         make exec SVC=ceph OPTS="-T" CMD="ceph osd pool create rbd2"
-  #         echo "💁 ceph list pools:"
-  #         make exec SVC=ceph OPTS="-T" CMD="ceph osd lspools"
-  #         echo "💁 rbd create RADOS namespace:"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd namespace create rbd/rados_ns1"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd namespace create rbd/rados_ns2"
-  #         echo "💁 rbd list RADOS namespaces in the pool rbd:"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd namespace ls rbd"
-  #         echo "💁 rbd create:"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd create rbd/mytestdevimage --size 16"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd create rbd2/mytestdevimage2 --size 16"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd create rbd/rados_ns1/image1 --size 16"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd create rbd/rados_ns1/image2 --size 16"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd create rbd/rados_ns2/image1 --size 16"
-  #         echo "💁 ls rbd:"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd ls rbd"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd ls rbd2"
+      - name: Create RBD image
+        run: |
+          echo "💁 ceph create pools:"
+          make exec SVC=ceph OPTS="-T" CMD="ceph osd pool create rbd"
+          make exec SVC=ceph OPTS="-T" CMD="ceph osd pool create rbd2"
+          echo "💁 ceph list pools:"
+          make exec SVC=ceph OPTS="-T" CMD="ceph osd lspools"
+          echo "💁 rbd create RADOS namespace:"
+          make exec SVC=ceph OPTS="-T" CMD="rbd namespace create rbd/rados_ns1"
+          make exec SVC=ceph OPTS="-T" CMD="rbd namespace create rbd/rados_ns2"
+          echo "💁 rbd list RADOS namespaces in the pool rbd:"
+          make exec SVC=ceph OPTS="-T" CMD="rbd namespace ls rbd"
+          echo "💁 rbd create:"
+          make exec SVC=ceph OPTS="-T" CMD="rbd create rbd/mytestdevimage --size 16"
+          make exec SVC=ceph OPTS="-T" CMD="rbd create rbd2/mytestdevimage2 --size 16"
+          make exec SVC=ceph OPTS="-T" CMD="rbd create rbd/rados_ns1/image1 --size 16"
+          make exec SVC=ceph OPTS="-T" CMD="rbd create rbd/rados_ns1/image2 --size 16"
+          make exec SVC=ceph OPTS="-T" CMD="rbd create rbd/rados_ns2/image1 --size 16"
+          echo "💁 ls rbd:"
+          make exec SVC=ceph OPTS="-T" CMD="rbd ls rbd"
+          make exec SVC=ceph OPTS="-T" CMD="rbd ls rbd2"
 
-  #     - name: Run protoc
-  #       run: |
-  #         make protoc
+      - name: Run protoc
+        run: |
+          make protoc
 
-  #     - name: Run ${{ matrix.test }} test
-  #       run: |
-  #         # Run tests code in current dir
-  #         # Managing pytest’s output: https://docs.pytest.org/en/7.1.x/how-to/output.html
-  #         make run SVC="nvmeof" OPTS="--volume=$(pwd)/tests:/src/tests --entrypoint=python3" CMD="-m pytest --show-capture=all -s --full-trace -vv -rA tests/test_${{ matrix.test }}.py"
+      - name: Run ${{ matrix.test }} test
+        run: |
+          # Run tests code in current dir
+          # Managing pytest’s output: https://docs.pytest.org/en/7.1.x/how-to/output.html
+          make run SVC="nvmeof" OPTS="--volume=$(pwd)/tests:/src/tests --entrypoint=python3" CMD="-m pytest --show-capture=all -s --full-trace -vv -rA tests/test_${{ matrix.test }}.py"
 
-  #     - name: Verify erasure pool image
-  #       if: ${{ matrix.test == 'erasure_pool' }}
-  #       run: |
-  #         echo "💁 check rbd image data-pool is set:"
-  #         make exec SVC=ceph OPTS="-T" CMD="rbd info -p rbd ec_pool_image" 2> /dev/null | grep "data_pool: ec_pool_overwrites"
+      - name: Verify erasure pool image
+        if: ${{ matrix.test == 'erasure_pool' }}
+        run: |
+          echo "💁 check rbd image data-pool is set:"
+          make exec SVC=ceph OPTS="-T" CMD="rbd info -p rbd ec_pool_image" 2> /dev/null | grep "data_pool: ec_pool_overwrites"
 
-  #     - name: Copy ceph logs
-  #       if: success() || failure()
-  #       run: docker cp  ceph:/ceph/out /tmp/out
+      - name: Copy ceph logs
+        if: success() || failure()
+        run: docker cp  ceph:/ceph/out /tmp/out
 
-  #     - name: Upload ceph logs
-  #       if: success() || failure()
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: ceph_out_pytest_${{ matrix.test }}
-  #         path: /tmp/out/*.log
+      - name: Upload ceph logs
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ceph_out_pytest_${{ matrix.test }}
+          path: /tmp/out/*.log
 
-  #     - name: Display logs
-  #       if: success() || failure()
-  #       run: |
-  #         make logs OPTS=""
+      - name: Display logs
+        if: success() || failure()
+        run: |
+          make logs OPTS=""
 
-  #     - name: Tear down
-  #       if: success() || failure()
-  #       run: |
-  #         make down
-  #         make clean
+      - name: Tear down
+        if: success() || failure()
+        run: |
+          make down
+          make clean
 
   # demo:
   #   needs: [build, build-ceph]
@@ -508,7 +509,7 @@ jobs:
       fail-fast: false
       matrix:
         # test: ["sanity", "no_huge", "ns_lb_change", "no_subsystems", "auto_load_balance", "state_transitions", "state_transitions_both_gws", "state_transitions_loop", "state_transitions_rand_loop", "late_registration", "late_registration_loop", "connect_panic", "4gws", "4gws_loop", "4gws_create_delete", "4gws_create_delete_loop", "namespaces", "namespaces_loop", "mtls", "notify", "ceph_status", "blocklist", "main_exit", "listener_hostname", "cluster_pool", "flat_bdev_per_cluster", "set_qos", "set_qos_2ms", "rbd_qos", "auto_resize", "ns_read_only", "reuse_image", "reuse_image2", "image_shrink", "gateway_removal", "rados_namespace"]
-        test: ["auto_listeners"]
+        test: ["auto_listeners", "auto_load_balance"]
     runs-on: ubuntu-latest
     env:
       HUGEPAGES: 1024  # 4 spdk instances

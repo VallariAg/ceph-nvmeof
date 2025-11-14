@@ -103,15 +103,18 @@ MAX_NAMESPACE=58
 echo "ℹ️ ℹ️  Wait for rebalance "
 sleep 250
 
+docker compose exec -T ceph ceph nvme-gw show rbd ''
 test_ns_distribution 2
 
 docker compose exec -T ceph ceph nvme-gw delete $GW1_NAME rbd ''
 echo "ℹ️ ℹ️  Wait for scale-down rebalance "
 sleep 110
+docker compose exec -T ceph ceph nvme-gw show rbd ''
 test_ns_distribution 1
 docker compose exec -T ceph ceph nvme-gw create $GW1_NAME rbd ''
 echo "ℹ️ ℹ️  Wait for rebalance after create GW"
 sleep 200
+docker compose exec -T ceph ceph nvme-gw show rbd ''
 test_ns_distribution 2
 
 ############################################################################################

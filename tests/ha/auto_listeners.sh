@@ -78,8 +78,7 @@ test_listeners()
    done
 }
 
-# TEST 1: create auto-listeners and verify
-echo "ℹ️ ℹ️ Start test (setup step):  create 2 subsystems with auto listeners and 1 normal subsystem with manual listeners:"
+echo "ℹ️ ℹ️ Start test:  create 2 subsystems with auto listeners and 1 normal subsystem with manual listeners:"
 
 docker compose run -T --rm nvmeof-cli --server-address $ip2 --server-port 5500 subsystem add -n $NQN1 --no-group-append --network-mask $SUBNET
 docker compose run -T --rm nvmeof-cli --server-address $ip2 --server-port 5500 subsystem add -n $NQN2 --no-group-append --network-mask $SUBNET --secure-listeners
