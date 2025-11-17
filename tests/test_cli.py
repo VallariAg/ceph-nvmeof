@@ -1620,6 +1620,100 @@ class TestCreate:
         adrfam = GatewayEnumUtils.get_key_from_value(pb2.AddressFamily, adrfam).lower()
         return adrfam
 
+    def test_auto_listener_ipv4(self, caplog, gateway):
+        print("VALLARI_DEBUG: testing print")
+        caplog.clear()
+        cli(["subsystem", "add", "--subsystem", subsystem16, "--no-group-append",
+             '--network-mask', f'{addr}/24'])
+        assert f"Adding subsystem {subsystem16}: Successful" in caplog.text
+        assert "ipv4" in caplog.text.lower()
+        assert f"Automatically created listener at {addr}:4420 for {subsystem16}"
+
+        time.sleep(40)
+    # def test_auto_listener_list_ipv4(self, caplog, gateway):
+        caplog.clear()
+        listeners = cli_test(["listener", "list", "--subsystem", subsystem16])
+        print("listeners for subsystem16")
+        print(listeners)
+        assert listeners.status == 0
+        assert listeners.listeners[0].host_name == host_name
+        assert listeners.listeners[0].traddr == addr
+        assert listeners.listeners[0].trsvcid == "4420"
+        assert self._adrfam2string(listeners.listeners[0].adrfam) == "ipv4"
+        assert listeners.listeners[0].active
+        assert not listeners.listeners[0].secure
+        assert not listeners.listeners[0].manual
+
+    def test_auto_listener_del_ipv4(self, caplog, gateway):
+        caplog.clear()
+        cli(["subsystem", "del", "--subsystem", subsystem16])
+        assert f"Deleting subsystem {subsystem16}: Successful" in caplog.text
+
+        time.sleep(15)
+        ceph_utils = CephUtils(gateway.config)
+        print(ceph_utils.get_gw_listeners(pool, group_name))
+
+    def test_auto_listener_secure(self, caplog, gateway):
+        caplog.clear()
+        cli(["subsystem", "add", "--subsystem", subsystem17, "--no-group-append",
+             '--network-mask', f'{addr}/24', '--secure-listeners'])
+        assert f"Adding subsystem {subsystem17}: Successful" in caplog.text
+        assert "ipv4" in caplog.text.lower()
+        assert f"Automatically created listener at {addr}:4420 for {subsystem17}"
+
+    # def test_auto_listener_list_secure(self, caplog, gateway):
+        time.sleep(60)
+        caplog.clear()
+        print("listeners for subsystem17")
+        listeners = cli_test(["listener", "list", "--subsystem", subsystem17])
+        print(listeners)
+        assert listeners.listeners[1].host_name == host_name
+        assert listeners.listeners[1].traddr == addr
+        assert listeners.listeners[1].trsvcid == "4420"
+        assert self._adrfam2string(listeners.listeners[1].adrfam) == "ipv4"
+        assert listeners.listeners[1].active
+        assert listeners.listeners[1].secure
+        assert not listeners.listeners[1].manual
+
+    def test_auto_listener_del_secure(self, caplog, gateway):
+        caplog.clear()
+        cli(["subsystem", "del", "--subsystem", subsystem17])
+        assert f"Deleting subsystem {subsystem17}: Successful" in caplog.text
+
+        time.sleep(15)
+        ceph_utils = CephUtils(gateway.config)
+        d = ceph_utils.get_gw_listeners(pool, group_name)
+        print(d)
+
+    def test_auto_listener_ipv6(self, caplog, gateway):
+        caplog.clear()
+        cli(["subsystem", "add", "--subsystem", subsystem18, "--no-group-append",
+             '--network-mask', f'{addr_ipv6}/120'])
+        assert f"Adding subsystem {subsystem18}: Successful" in caplog.text
+        assert "ipv6" in caplog.text.lower()
+        assert f"Automatically created listener at {addr_ipv6}:4420 for {subsystem18}"
+
+    # def test_auto_listener_list_ipv6(self, caplog, gateway):
+        time.sleep(30)
+        caplog.clear()
+        listeners = cli_test(["listener", "list", "--subsystem", subsystem18])
+        assert listeners.listeners[1].host_name == host_name
+        assert listeners.listeners[1].traddr == addr_ipv6
+        assert listeners.listeners[1].trsvcid == "4420"
+        assert self._adrfam2string(listeners.listeners[1].adrfam) == "ipv6"
+        assert listeners.listeners[1].active
+        assert not listeners.listeners[1].secure
+        assert not listeners.listeners[1].manual
+
+    def test_auto_listener_del_ipv6(self, caplog, gateway):
+        caplog.clear()
+        cli(["subsystem", "del", "--subsystem", subsystem18])
+        assert f"Deleting subsystem {subsystem18}: Successful" in caplog.text
+
+        time.sleep(15)
+        ceph_utils = CephUtils(gateway.config)
+        ceph_utils.get_gw_listeners(pool, group_name)
+
     def test_list_listeners(self, caplog, gateway):
         caplog.clear()
         listeners = cli_test(["listener", "list", "--subsystem", subsystem])
@@ -1630,6 +1724,7 @@ class TestCreate:
         assert self._adrfam2string(listeners.listeners[0].adrfam) == listener_list[0][5].lower()
         assert listeners.listeners[0].active
         assert not listeners.listeners[0].secure
+        assert listeners.listeners[0].manual
 
         assert listeners.listeners[1].host_name == host_name
         assert listeners.listeners[1].traddr == listener_list[1][1]
@@ -1637,6 +1732,7 @@ class TestCreate:
         assert self._adrfam2string(listeners.listeners[1].adrfam) == "ipv4"
         assert listeners.listeners[1].active
         assert not listeners.listeners[1].secure
+        assert listeners.listeners[1].manual
 
         assert listeners.listeners[2].host_name == host_name
         assert listeners.listeners[2].traddr == listener_list_ipv6[0][1]
@@ -1645,6 +1741,7 @@ class TestCreate:
             self._adrfam2string(listeners.listeners[2].adrfam) == listener_list_ipv6[0][5].lower()
         assert listeners.listeners[2].active
         assert not listeners.listeners[2].secure
+        assert listeners.listeners[2].manual
 
         assert listeners.listeners[3].host_name == host_name
         assert listeners.listeners[3].traddr == listener_list_ipv6[1][1]
@@ -1653,6 +1750,7 @@ class TestCreate:
             self._adrfam2string(listeners.listeners[3].adrfam) == listener_list_ipv6[1][5].lower()
         assert listeners.listeners[3].active
         assert not listeners.listeners[3].secure
+        assert listeners.listeners[3].manual
 
         assert listeners.listeners[4].host_name == host_name
         assert listeners.listeners[4].traddr == listener_list_no_port[0][1]
@@ -1660,6 +1758,7 @@ class TestCreate:
         assert self._adrfam2string(listeners.listeners[4].adrfam) == "ipv4"
         assert listeners.listeners[4].active
         assert not listeners.listeners[4].secure
+        assert listeners.listeners[4].manual
 
         assert listeners.listeners[5].host_name == host_name
         assert listeners.listeners[5].traddr == listener_list_no_adrfam[0][1]
@@ -1667,6 +1766,7 @@ class TestCreate:
         assert self._adrfam2string(listeners.listeners[5].adrfam) == "ipv4"
         assert listeners.listeners[5].active
         assert not listeners.listeners[5].secure
+        assert listeners.listeners[5].manual
 
     def test_list_listeners_bad_subsys(self, caplog, gateway):
         caplog.clear()

@@ -5877,6 +5877,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 pool = self.config.get("ceph", "pool")
                 group = self.config.get("gateway", "group")
                 nvmemon_listeners = self.ceph_utils.get_gw_listeners(pool, group)
+                self.logger.info(f"VALLARI_DEBUG: {nvmemon_listeners}")
                 if request.subsystem in nvmemon_listeners:
                     subsystem_listeners = nvmemon_listeners[request.subsystem]
                     secure = subsystem.get('secure_listeners', False)
