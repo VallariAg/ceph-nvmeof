@@ -1,6 +1,6 @@
 # syntax = docker/dockerfile:1.4
 # vim: syntax=dockerfile
-FROM quay.io/centos/centos:stream9-minimal AS build
+FROM quay.io/rockylinux/rockylinux:10-minimal AS build
 
 
 ARG CEPH_CLUSTER_VERSION
@@ -70,7 +70,9 @@ EOF
 RUN cat /etc/yum.repos.d/ceph.repo
 
 RUN rpm -vih https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-RUN rpm --import 'https://download.ceph.com/keys/release.asc'
+# RUN rpm --import 'https://download.ceph.com/keys/release.asc'
+# RUN curl -L -o /tmp/ceph.asc https://download.ceph.com/keys/release.asc && \
+    # rpm --import --nosignature /tmp/ceph.asc
 RUN curl -O --output-dir /etc/yum.repos.d/ ${CEPH_CLUSTER_EPEL_REPO_URL:?}
 
 RUN --mount=type=cache,target=/var/cache/microdnf \
