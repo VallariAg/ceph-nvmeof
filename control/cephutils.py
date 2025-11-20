@@ -58,6 +58,11 @@ class CephUtils:
 
     def get_gw_listeners(self, pool, group) -> list:
         try:
+            str = '{' + f'"prefix":"nvme-gw show", "pool":"{pool}", "group":"{group}"' + '}'
+            self.logger.debug(f"nvme-gw show string: {str}")
+            rply = self.execute_ceph_monitor_command(str)
+            self.logger.info(f"VALLARI_DEBUG: '{pool}' '{group}' {rply}")
+
             str = '{' + f'"prefix":"nvme-gw listeners", "pool":"{pool}", "group":"{group}"' + '}'
             self.logger.debug(f"nvme-listeners string: {str}")
             rply = self.execute_ceph_monitor_command(str)

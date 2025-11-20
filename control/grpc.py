@@ -5867,6 +5867,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 self.logger.exception(f"Got exception while parsing {val}")
                 continue
         try:
+            pool = self.config.get("ceph", "pool")
+            group = self.config.get("gateway", "group")
+            nvmemon_listeners = self.ceph_utils.get_gw_listeners(pool, group)
             subsys_key = GatewayState.build_subsystem_key(request.subsystem)
             if subsys_key not in state:
                 err_msg = (f"Subsystem {request.subsystem} not found in local gateway state")

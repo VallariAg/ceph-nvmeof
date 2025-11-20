@@ -193,6 +193,7 @@ jobs:
           echo "💁 ls rbd:"
           make exec SVC=ceph OPTS="-T" CMD="rbd ls rbd"
           make exec SVC=ceph OPTS="-T" CMD="rbd ls rbd2"
+          make exec SVC=ceph OPTS="-T" CMD="ceph config set mon debug_mon 20/20"
 
       - name: Run protoc
         run: |

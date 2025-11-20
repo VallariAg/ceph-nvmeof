@@ -1629,8 +1629,20 @@ class TestCreate:
         assert "ipv4" in caplog.text.lower()
         assert f"Automatically created listener at {addr}:4420 for {subsystem16}"
 
-        time.sleep(40)
-    # def test_auto_listener_list_ipv4(self, caplog, gateway):
+    def test_auto_listener_secure(self, caplog, gateway):
+        caplog.clear()
+        cli(["subsystem", "add", "--subsystem", subsystem17, "--no-group-append",
+             '--network-mask', f'{addr}/24', '--secure-listeners'])
+        assert f"Adding subsystem {subsystem17}: Successful" in caplog.text
+        assert "ipv4" in caplog.text.lower()
+        assert f"Automatically created listener at {addr}:4420 for {subsystem17}"
+
+    def test_auto_listener_list_debug(self, caplog, gateway):
+        caplog.clear()
+        listeners = cli_test(["listener", "list", "--subsystem", subsystem])
+        print(listeners)
+
+    def test_auto_listener_list(self, caplog, gateway):
         caplog.clear()
         listeners = cli_test(["listener", "list", "--subsystem", subsystem16])
         print("listeners for subsystem16")
@@ -1644,25 +1656,7 @@ class TestCreate:
         assert not listeners.listeners[0].secure
         assert not listeners.listeners[0].manual
 
-    def test_auto_listener_del_ipv4(self, caplog, gateway):
-        caplog.clear()
-        cli(["subsystem", "del", "--subsystem", subsystem16])
-        assert f"Deleting subsystem {subsystem16}: Successful" in caplog.text
-
-        time.sleep(15)
-        ceph_utils = CephUtils(gateway.config)
-        print(ceph_utils.get_gw_listeners(pool, group_name))
-
-    def test_auto_listener_secure(self, caplog, gateway):
-        caplog.clear()
-        cli(["subsystem", "add", "--subsystem", subsystem17, "--no-group-append",
-             '--network-mask', f'{addr}/24', '--secure-listeners'])
-        assert f"Adding subsystem {subsystem17}: Successful" in caplog.text
-        assert "ipv4" in caplog.text.lower()
-        assert f"Automatically created listener at {addr}:4420 for {subsystem17}"
-
-    # def test_auto_listener_list_secure(self, caplog, gateway):
-        time.sleep(60)
+    def test_auto_listener_list_secure(self, caplog, gateway):
         caplog.clear()
         print("listeners for subsystem17")
         listeners = cli_test(["listener", "list", "--subsystem", subsystem17])
@@ -1675,15 +1669,14 @@ class TestCreate:
         assert listeners.listeners[1].secure
         assert not listeners.listeners[1].manual
 
-    def test_auto_listener_del_secure(self, caplog, gateway):
+    def test_auto_listener_del(self, caplog, gateway):
+        caplog.clear()
+        cli(["subsystem", "del", "--subsystem", subsystem16])
+        assert f"Deleting subsystem {subsystem16}: Successful" in caplog.text
+
         caplog.clear()
         cli(["subsystem", "del", "--subsystem", subsystem17])
         assert f"Deleting subsystem {subsystem17}: Successful" in caplog.text
-
-        time.sleep(15)
-        ceph_utils = CephUtils(gateway.config)
-        d = ceph_utils.get_gw_listeners(pool, group_name)
-        print(d)
 
     def test_auto_listener_ipv6(self, caplog, gateway):
         caplog.clear()
@@ -1693,7 +1686,7 @@ class TestCreate:
         assert "ipv6" in caplog.text.lower()
         assert f"Automatically created listener at {addr_ipv6}:4420 for {subsystem18}"
 
-    # def test_auto_listener_list_ipv6(self, caplog, gateway):
+    def test_auto_listener_list_ipv6(self, caplog, gateway):
         time.sleep(30)
         caplog.clear()
         listeners = cli_test(["listener", "list", "--subsystem", subsystem18])
@@ -1709,10 +1702,6 @@ class TestCreate:
         caplog.clear()
         cli(["subsystem", "del", "--subsystem", subsystem18])
         assert f"Deleting subsystem {subsystem18}: Successful" in caplog.text
-
-        time.sleep(15)
-        ceph_utils = CephUtils(gateway.config)
-        ceph_utils.get_gw_listeners(pool, group_name)
 
     def test_list_listeners(self, caplog, gateway):
         caplog.clear()
