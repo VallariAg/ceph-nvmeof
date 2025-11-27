@@ -141,6 +141,7 @@ def gateway(config):
             f'"group": "{group_name}"' + "}"
         )
         gateway.serve()
+        # gateway.keep_alive()
 
         # Bind the client and Gateway
         channel = grpc.insecure_channel(f"{addr}:{port}")
@@ -2052,6 +2053,8 @@ class TestAutoListener:
         time.sleep(60)
 
     def test_auto_listener_gw_info(self, caplog, gateway):
+        cli(["subsystem", "list"])
+        time.sleep(5)
         caplog.clear()
         listeners16 = cli_test(["--server-address", addr, "gw", "listener_info",
                                 "--subsystem", subsystem16])
