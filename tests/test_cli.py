@@ -2051,9 +2051,19 @@ class TestAutoListener:
         assert f"Automatically created listener at {addr}:4420 for {subsystem17}"
         time.sleep(60)
 
-    def test_auto_listener_list_debug(self, caplog, gateway):
+    def test_auto_listener_gw_info(self, caplog, gateway):
         caplog.clear()
-        listeners = cli_test(["listener", "list", "--subsystem", subsystem])
+        listeners16 = cli_test(["--server-address", addr, "gw", "listener_info",
+                                "--subsystem", subsystem16])
+        print(f'{listeners16=}')
+        listeners17 = cli_test(["--server-address", addr, "gw", "listener_info",
+                                "--subsystem", subsystem17])
+        print(f'{listeners17=}')
+        subsys = cli_test(["--server-address", addr, "get_subsystems"])
+        print(f'{subsys=}')
+        listeners = cli_test(["--server-address", addr, "listener", "list",
+                              "--subsystem", subsystem16])
+        print("listeners for subsystem16")
         print(listeners)
 
     def test_auto_listener_list(self, caplog, gateway):
