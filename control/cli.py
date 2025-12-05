@@ -1153,7 +1153,7 @@ class GatewayClient:
                  help="For this subnet, automatically create listeners for this subsystem",
                  required=False),
         argument("--secure-listeners",
-                 help="Make all the auto-listeners for this subsystem secures",
+                 help="Make all the auto-listeners for this subsystem secure",
                  action='store_true',
                  required=False),
     ]
