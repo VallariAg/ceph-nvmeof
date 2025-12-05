@@ -1921,6 +1921,10 @@ class GatewayService(pb2_grpc.GatewayServicer):
         return self.execute_grpc_function(self.create_subsystem_safe, request, context, err_prefix)
 
     def create_auto_listeners_safe(self, request, context=None):
+        """
+        Automatically create listeners for IPs within subnet of 'network_mask'
+        request: create_subsystem_req type
+        """
 
         def _get_host_ips(subnet: str) -> list:
             nics = NICS(self.logger, True)
