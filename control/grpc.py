@@ -5840,8 +5840,12 @@ class GatewayService(pb2_grpc.GatewayServicer):
                         hostname = GatewayUtils.get_hostname(listener["traddr"], self.logger)
                         if hostname:
                             listener["host_name"] = hostname
-                        listener = json_format.Parse(val, pb2.create_listener_req(),
+                        self.logger.info(f"VALLARI_DEBUG {listener=}")
+                        listener_json = json.dumps(listener)
+                        listener = json_format.Parse(listener_json,
+                                                     pb2.create_listener_req(),  # error
                                                      ignore_unknown_fields=True)
+                        self.logger.info(f"VALLARI_DEBUG create_listener_req {listener=}")
                         active = self._is_active_listener(request.subsystem, listener)
                         one_listener = pb2.listener_info(
                             host_name=listener.host_name,
