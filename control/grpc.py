@@ -5755,13 +5755,11 @@ class GatewayService(pb2_grpc.GatewayServicer):
         active = False
         if subsystem_nqn in self.subsystem_listeners:
             traddr = GatewayUtils.unescape_address_if_ipv6(listener.traddr, adrfam)
-            lookfor = (adrfam, traddr,
-                        int(listener.trsvcid), secure, False)
+            lookfor = (adrfam, traddr, int(listener.trsvcid), secure, False)
             if lookfor in self.subsystem_listeners[subsystem_nqn]:
                 active = False
             else:
-                lookfor = (adrfam, traddr,
-                            int(listener.trsvcid), secure, True)
+                lookfor = (adrfam, traddr, int(listener.trsvcid), secure, True)
                 if lookfor in self.subsystem_listeners[subsystem_nqn]:
                     active = True
                 else:
@@ -5807,7 +5805,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                                  active=active,
                                                  manual=True)
                 listeners.append(one_listener)
-                listener_key = (listener["traddr"], listener["trsvcid"], secure)
+                listener_key = (listener["traddr"], listener["trsvcid"], listener.secure)
                 omap_listeners.add(listener_key)
             except Exception:
                 self.logger.exception(f"Got exception while parsing {val}")
@@ -5843,7 +5841,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                         if hostname:
                             listener["host_name"] = hostname
                         listener = json_format.Parse(val, pb2.create_listener_req(),
-                                             ignore_unknown_fields=True)
+                                                     ignore_unknown_fields=True)
                         active = self._is_active_listener(request.subsystem, listener)
                         one_listener = pb2.listener_info(
                             host_name=listener.host_name,
