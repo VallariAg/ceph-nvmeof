@@ -5799,7 +5799,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                                  active=active,
                                                  manual=True)
                 listeners.append(one_listener)
-                listener_key = (listener["traddr"], listener["trsvcid"], listener.secure)
+                listener_key = (listener.traddr, listener.trsvcid, listener.secure)
                 omap_listeners.add(listener_key)
             except Exception:
                 self.logger.exception(f"Got exception while parsing {val}")
