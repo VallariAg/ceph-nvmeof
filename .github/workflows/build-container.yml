@@ -107,7 +107,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test: ["cli", "cli_change_lb", "cli_change_keys", "cli_change_ns_visibility", "cli_change_ns_location", "cli_trash_rbd", "state", "multi_gateway", "server", "grpc", "omap_lock", "log_files", "nsid", "psk", "dhchap", "subsys_grp_name_append", "max_subsystems", "omap_no_read_lock", "omap_read_lock", "omap_read_lock_ignore_errors", "big_omap", "ns_limit", "cli_force_tls", "erasure_pool", "cli_ns_resize", "auto_listeners"]
+        # test: ["cli", "auto_listeners", "cli_change_lb", "cli_change_keys", "cli_change_ns_visibility", "cli_change_ns_location", "cli_trash_rbd", "state", "multi_gateway", "server", "grpc", "omap_lock", "log_files", "nsid", "psk", "dhchap", "subsys_grp_name_append", "max_subsystems", "omap_no_read_lock", "omap_read_lock", "omap_read_lock_ignore_errors", "big_omap", "ns_limit", "cli_force_tls", "erasure_pool"]
+        test: ["auto_listeners"]
     runs-on: ubuntu-latest
     env:
       HUGEPAGES: 512  # for multi gateway test, approx 256 per gateway instance
@@ -192,6 +193,8 @@ jobs:
           echo "💁 ls rbd:"
           make exec SVC=ceph OPTS="-T" CMD="rbd ls rbd"
           make exec SVC=ceph OPTS="-T" CMD="rbd ls rbd2"
+          make exec SVC=ceph OPTS="-T" CMD="ceph tell mon.a config set debug_mon 20/20"
+          make exec SVC=ceph OPTS="-T" CMD="ceph tell mon.a config set debug_ms 1/1"
 
       - name: Run protoc
         run: |
@@ -231,283 +234,284 @@ jobs:
           make down
           make clean
 
-  demo:
-    needs: [build, build-ceph]
-    strategy:
-      fail-fast: false
-      matrix:
-        security_protocol: ["unsecured", "psk", "dhchap"]
-    runs-on: ubuntu-latest
-    env:
-      HUGEPAGES: 512
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  # demo:
+  #   needs: [build, build-ceph]
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       security_protocol: ["unsecured", "psk", "dhchap"]
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     HUGEPAGES: 512
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Setup huge-pages
-        run: make setup HUGEPAGES=$HUGEPAGES
+  #     - name: Setup huge-pages
+  #       run: make setup HUGEPAGES=$HUGEPAGES
 
-      - name: Download container images
-        uses: actions/download-artifact@v4
-        with:
-          pattern: container_images*
-          merge-multiple: true
+  #     - name: Download container images
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: container_images*
+  #         merge-multiple: true
 
-      - name: Load container images
-        run: |
-          docker load < nvmeof.tar
-          docker load < nvmeof-cli.tar
-          docker load < ceph.tar
-          docker load < bdevperf.tar
+  #     - name: Load container images
+  #       run: |
+  #         docker load < nvmeof.tar
+  #         docker load < nvmeof-cli.tar
+  #         docker load < ceph.tar
+  #         docker load < bdevperf.tar
 
-      - name: Start containers
-        timeout-minutes: 3
-        run: |
-          make up
+  #     - name: Start containers
+  #       timeout-minutes: 3
+  #       run: |
+  #         make up
 
-      - name: Wait for the Gateway to be listening
-        timeout-minutes: 3
-        run: |
-          . .env
+  #     - name: Wait for the Gateway to be listening
+  #       timeout-minutes: 3
+  #       run: |
+  #         . .env
 
-          echo using gateway $NVMEOF_IP_ADDRESS port $NVMEOF_GW_PORT
-          until nc -z $NVMEOF_IP_ADDRESS $NVMEOF_GW_PORT; do
-            echo -n .
-            sleep ${{ env.WAIT_INTERVAL_SECS }}
-          done
+  #         echo using gateway $NVMEOF_IP_ADDRESS port $NVMEOF_GW_PORT
+  #         until nc -z $NVMEOF_IP_ADDRESS $NVMEOF_GW_PORT; do
+  #           echo -n .
+  #           sleep ${{ env.WAIT_INTERVAL_SECS }}
+  #         done
 
-      - name: List containers
-        if: success() || failure()
-        run: make ps
+  #     - name: List containers
+  #       if: success() || failure()
+  #       run: make ps
 
-      - name: List processes
-        if: success() || failure()
-        run: make top
+  #     - name: List processes
+  #       if: success() || failure()
+  #       run: make top
 
-      - name: Test ${{ matrix.security_protocol }}
-        run: |
-          ./tests/ha/demo_test.sh test_${{ matrix.security_protocol }}
+  #     - name: Test ${{ matrix.security_protocol }}
+  #       run: |
+  #         ./tests/ha/demo_test.sh test_${{ matrix.security_protocol }}
 
-      - name: List resources
-        run: |
-          # https://github.com/actions/toolkit/issues/766
-          shopt -s expand_aliases
-          eval $(make alias)
-          cephnvmf subsystem list
-          subs=$(cephnvmf --output stdio --format json subsystem list | jq -r '.subsystems[].nqn')
-          for sub in $subs
-          do
-              cephnvmf namespace list --subsystem $sub
-              cephnvmf listener list --subsystem $sub
-              cephnvmf host list --subsystem $sub
-          done
-          cephnvmf namespace list
+  #     - name: List resources
+  #       run: |
+  #         # https://github.com/actions/toolkit/issues/766
+  #         shopt -s expand_aliases
+  #         eval $(make alias)
+  #         cephnvmf subsystem list
+  #         subs=$(cephnvmf --output stdio --format json subsystem list | jq -r '.subsystems[].nqn')
+  #         for sub in $subs
+  #         do
+  #             cephnvmf namespace list --subsystem $sub
+  #             cephnvmf listener list --subsystem $sub
+  #             cephnvmf host list --subsystem $sub
+  #         done
+  #         cephnvmf namespace list
 
-      - name: Run bdevperf
-        run: |
-          ./tests/ha/demo_test.sh bdevperf_${{ matrix.security_protocol }}
+  #     - name: Run bdevperf
+  #       run: |
+  #         ./tests/ha/demo_test.sh bdevperf_${{ matrix.security_protocol }}
 
-      # For debugging purposes (provides an SSH connection to the runner)
-      # - name: Setup tmate session
-      #   uses: mxschmitt/action-tmate@v3
-      #   with:
-      #     limit-access-to-actor: true
+  #     # For debugging purposes (provides an SSH connection to the runner)
+  #     # - name: Setup tmate session
+  #     #   uses: mxschmitt/action-tmate@v3
+  #     #   with:
+  #     #     limit-access-to-actor: true
 
-      - name: Copy ceph logs
-        if: success() || failure()
-        run: docker cp  ceph:/ceph/out /tmp/out
+  #     - name: Copy ceph logs
+  #       if: success() || failure()
+  #       run: docker cp  ceph:/ceph/out /tmp/out
 
-      - name: Upload ceph logs
-        if: success() || failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ceph_out_demo_${{ matrix.security_protocol }}
-          path: /tmp/out/*.log
+  #     - name: Upload ceph logs
+  #       if: success() || failure()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: ceph_out_demo_${{ matrix.security_protocol }}
+  #         path: /tmp/out/*.log
 
-      - name: Display logs
-        if: success() || failure()
-        run: make logs OPTS=''
+  #     - name: Display logs
+  #       if: success() || failure()
+  #       run: make logs OPTS=''
 
-      - name: Tear down
-        if: success() || failure()
-        run: |
-          make down
-          make clean
+  #     - name: Tear down
+  #       if: success() || failure()
+  #       run: |
+  #         make down
+  #         make clean
 
-  discovery:
-    needs: [build, build-ceph]
-    strategy:
-      fail-fast: false
-      matrix:
-        integration: ["container", "embedded"]
-    runs-on: ubuntu-latest
-    env:
-      HUGEPAGES: 768  # 3 spdk instances
+  # discovery:
+  #   needs: [build, build-ceph]
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       integration: ["container", "embedded"]
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     HUGEPAGES: 768  # 3 spdk instances
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Setup huge-pages
-        run: make setup HUGEPAGES=$HUGEPAGES
+  #     - name: Setup huge-pages
+  #       run: make setup HUGEPAGES=$HUGEPAGES
 
-      - name: Download container images
-        uses: actions/download-artifact@v4
-        with:
-          pattern: container_images*
-          merge-multiple: true
+  #     - name: Download container images
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: container_images*
+  #         merge-multiple: true
 
-      - name: Load container images
-        run: |
-          docker load < nvmeof.tar
-          docker load < nvmeof-cli.tar
-          docker load < ceph.tar
-          docker load < bdevperf.tar
+  #     - name: Load container images
+  #       run: |
+  #         docker load < nvmeof.tar
+  #         docker load < nvmeof-cli.tar
+  #         docker load < ceph.tar
+  #         docker load < bdevperf.tar
 
-      - name: Start discovery controller
-        if: matrix.integration == 'container'
-        run: |
-          docker compose version
-          docker compose up --detach discovery
+  #     - name: Start discovery controller
+  #       if: matrix.integration == 'container'
+  #       run: |
+  #         docker compose version
+  #         docker compose up --detach discovery
 
-      - name: Wait for discovery controller to be listening
-        if: matrix.integration == 'container'
-        timeout-minutes: 3
-        run: |
-          . .env
-          container_ip() {
-            docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
-          }
+  #     - name: Wait for discovery controller to be listening
+  #       if: matrix.integration == 'container'
+  #       timeout-minutes: 3
+  #       run: |
+  #         . .env
+  #         container_ip() {
+  #           docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
+  #         }
 
-          ip=$(container_ip $DISC1)
-          echo using discovery controller $ip $NVMEOF_DISC_PORT
-          until nc -z $ip $NVMEOF_DISC_PORT; do
-            echo -n .
-            sleep ${{ env.WAIT_INTERVAL_SECS }}
-          done
+  #         ip=$(container_ip $DISC1)
+  #         echo using discovery controller $ip $NVMEOF_DISC_PORT
+  #         until nc -z $ip $NVMEOF_DISC_PORT; do
+  #           echo -n .
+  #           sleep ${{ env.WAIT_INTERVAL_SECS }}
+  #         done
 
-      - name: Start gateway with scale=2
-        run: |
-          ./tests/ha/start_up.sh
+  #     - name: Start gateway with scale=2
+  #       run: |
+  #         ./tests/ha/start_up.sh
 
-      - name: Wait for gateways to be listening
-        timeout-minutes: 3
-        run: |
-          . .env
-          container_ip() {
-            docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
-          }
+  #     - name: Wait for gateways to be listening
+  #       timeout-minutes: 3
+  #       run: |
+  #         . .env
+  #         container_ip() {
+  #           docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
+  #         }
 
-          for gw in $GW1 $GW2; do
-            ip=$(container_ip $gw)
-            echo using gateway $ip $NVMEOF_GW_PORT
-            until nc -z $ip $NVMEOF_GW_PORT; do
-              echo -n .
-              sleep ${{ env.WAIT_INTERVAL_SECS }}
-            done
-            echo
-          done
+  #         for gw in $GW1 $GW2; do
+  #           ip=$(container_ip $gw)
+  #           echo using gateway $ip $NVMEOF_GW_PORT
+  #           until nc -z $ip $NVMEOF_GW_PORT; do
+  #             echo -n .
+  #             sleep ${{ env.WAIT_INTERVAL_SECS }}
+  #           done
+  #           echo
+  #         done
 
-      - name: List containers
-        if: success() || failure()
-        run: |
-          docker compose ps
+  #     - name: List containers
+  #       if: success() || failure()
+  #       run: |
+  #         docker compose ps
 
-      - name: List processes
-        if: success() || failure()
-        run: |
-          docker compose top
+  #     - name: List processes
+  #       if: success() || failure()
+  #       run: |
+  #         docker compose top
 
-      - name: Set up target
-        run: |
-          . .env
+  #     - name: Set up target
+  #       run: |
+  #         . .env
 
-          container_ip() {
-            docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
-          }
-          # container id is the default hostname in docker environent
-          # i.e. default gateway name
-          container_id() {
-            docker ps -q -f name=$1
-          }
-          cli_gw() {
-            gw=$1
-            shift
-            docker compose run --rm nvmeof-cli --server-address $gw --server-port $NVMEOF_GW_PORT "$@"
-          }
+  #         container_ip() {
+  #           docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
+  #         }
+  #         # container id is the default hostname in docker environent
+  #         # i.e. default gateway name
+  #         container_id() {
+  #           docker ps -q -f name=$1
+  #         }
+  #         cli_gw() {
+  #           gw=$1
+  #           shift
+  #           docker compose run --rm nvmeof-cli --server-address $gw --server-port $NVMEOF_GW_PORT "$@"
+  #         }
 
-          gw1=$(container_ip $GW1)
-          echo ℹ️ Using GW RPC $GW1 address $gw1 port $NVMEOF_GW_PORT
-          cli_gw $gw1 subsystem list
-          cli_gw $gw1 subsystem add --subsystem $NQN --serial $SERIAL
-          cli_gw $gw1 namespace add --subsystem $NQN --rbd-pool $RBD_POOL --rbd-image $RBD_IMAGE_NAME --size $RBD_IMAGE_SIZE --rbd-create-image
-          for gw in $GW1 $GW2; do
-            ip=$(container_ip $gw)
-            name=$(container_id $gw) # default hostname - container id
-            echo ℹ️ Create listener address $ip gateway $name
-            cli_gw $ip listener add --subsystem $NQN --host-name $name --traddr $ip --trsvcid $NVMEOF_IO_PORT
-          done
-          cli_gw $gw1 host add --subsystem $NQN --host-nqn "*"
-          for gw in $GW1 $GW2; do
-            ip=$(container_ip $gw)
-            echo ℹ️ Subsystems for name $gw ip $ip
-            cli_gw $ip subsystem list
-          done
+  #         gw1=$(container_ip $GW1)
+  #         echo ℹ️ Using GW RPC $GW1 address $gw1 port $NVMEOF_GW_PORT
+  #         cli_gw $gw1 subsystem list
+  #         cli_gw $gw1 subsystem add --subsystem $NQN --serial $SERIAL
+  #         cli_gw $gw1 namespace add --subsystem $NQN --rbd-pool $RBD_POOL --rbd-image $RBD_IMAGE_NAME --size $RBD_IMAGE_SIZE --rbd-create-image
+  #         for gw in $GW1 $GW2; do
+  #           ip=$(container_ip $gw)
+  #           name=$(container_id $gw) # default hostname - container id
+  #           echo ℹ️ Create listener address $ip gateway $name
+  #           cli_gw $ip listener add --subsystem $NQN --host-name $name --traddr $ip --trsvcid $NVMEOF_IO_PORT
+  #         done
+  #         cli_gw $gw1 host add --subsystem $NQN --host-nqn "*"
+  #         for gw in $GW1 $GW2; do
+  #           ip=$(container_ip $gw)
+  #           echo ℹ️ Subsystems for name $gw ip $ip
+  #           cli_gw $ip subsystem list
+  #         done
 
-      - name: Run bdevperf discovery
-        run: |
-          # See
-          # - https://github.com/spdk/spdk/blob/master/doc/jsonrpc.md
-          # - https://spdk.io/doc/nvmf_multipath_howto.html
-          . .env
-          container_ip() {
-            docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
-          }
+  #     - name: Run bdevperf discovery
+  #       run: |
+  #         # See
+  #         # - https://github.com/spdk/spdk/blob/master/doc/jsonrpc.md
+  #         # - https://spdk.io/doc/nvmf_multipath_howto.html
+  #         . .env
+  #         container_ip() {
+  #           docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$1"
+  #         }
 
-          echo -n "ℹ️  Starting bdevperf container"
-          docker compose up -d bdevperf
-          sleep 10
-          echo "ℹ️  bdevperf start up logs"
-          make logs SVC=bdevperf
-          eval $(make run SVC=bdevperf OPTS="--entrypoint=env" | grep BDEVPERF_SOCKET | tr -d '\n\r' )
+  #         echo -n "ℹ️  Starting bdevperf container"
+  #         docker compose up -d bdevperf
+  #         sleep 10
+  #         echo "ℹ️  bdevperf start up logs"
+  #         make logs SVC=bdevperf
+  #         eval $(make run SVC=bdevperf OPTS="--entrypoint=env" | grep BDEVPERF_SOCKET | tr -d '\n\r' )
 
-          if [ "${{ matrix.integration }}" == "embedded" ]; then
-            ip=$(container_ip $GW1)
-            echo "ℹ️  Using discovery service in gateway $GW1 ip  $ip"
-          else
-            ip=$(container_ip $DISC1)
-            echo "ℹ️  Using standalone discovery container $DISC1 ip  $ip"
-          fi
-          rpc="/usr/libexec/spdk/scripts/rpc.py"
-          echo "ℹ️  bdevperf bdev_nvme_set_options"
-          make exec SVC=bdevperf OPTS=-T CMD="$rpc -v -s $BDEVPERF_SOCKET bdev_nvme_set_options -r -1"
-          echo "ℹ️  bdevperf start discovery ip: $ip port: $NVMEOF_DISC_PORT"
-          # -l -1 -o 10
-          make exec SVC=bdevperf OPTS=-T CMD="$rpc -v -s $BDEVPERF_SOCKET bdev_nvme_start_discovery -b Nvme0 -t tcp -a $ip -s $NVMEOF_DISC_PORT -f ipv4 -w"
-          echo "ℹ️  bdevperf bdev_nvme_get_discovery_info"
-          make exec SVC=bdevperf OPTS=-T CMD="$rpc -v -s $BDEVPERF_SOCKET bdev_nvme_get_discovery_info"
-          echo "ℹ️  bdevperf perform_tests"
-          eval $(make run SVC=bdevperf OPTS="--entrypoint=env" | grep BDEVPERF_TEST_DURATION | tr -d '\n\r' )
-          timeout=$(expr $BDEVPERF_TEST_DURATION \* 2)
-          bdevperf="/usr/libexec/spdk/scripts/bdevperf.py"
-          make exec SVC=bdevperf OPTS=-T CMD="$bdevperf -v -t $timeout -s $BDEVPERF_SOCKET perform_tests"
+  #         if [ "${{ matrix.integration }}" == "embedded" ]; then
+  #           ip=$(container_ip $GW1)
+  #           echo "ℹ️  Using discovery service in gateway $GW1 ip  $ip"
+  #         else
+  #           ip=$(container_ip $DISC1)
+  #           echo "ℹ️  Using standalone discovery container $DISC1 ip  $ip"
+  #         fi
+  #         rpc="/usr/libexec/spdk/scripts/rpc.py"
+  #         echo "ℹ️  bdevperf bdev_nvme_set_options"
+  #         make exec SVC=bdevperf OPTS=-T CMD="$rpc -v -s $BDEVPERF_SOCKET bdev_nvme_set_options -r -1"
+  #         echo "ℹ️  bdevperf start discovery ip: $ip port: $NVMEOF_DISC_PORT"
+  #         # -l -1 -o 10
+  #         make exec SVC=bdevperf OPTS=-T CMD="$rpc -v -s $BDEVPERF_SOCKET bdev_nvme_start_discovery -b Nvme0 -t tcp -a $ip -s $NVMEOF_DISC_PORT -f ipv4 -w"
+  #         echo "ℹ️  bdevperf bdev_nvme_get_discovery_info"
+  #         make exec SVC=bdevperf OPTS=-T CMD="$rpc -v -s $BDEVPERF_SOCKET bdev_nvme_get_discovery_info"
+  #         echo "ℹ️  bdevperf perform_tests"
+  #         eval $(make run SVC=bdevperf OPTS="--entrypoint=env" | grep BDEVPERF_TEST_DURATION | tr -d '\n\r' )
+  #         timeout=$(expr $BDEVPERF_TEST_DURATION \* 2)
+  #         bdevperf="/usr/libexec/spdk/scripts/bdevperf.py"
+  #         make exec SVC=bdevperf OPTS=-T CMD="$bdevperf -v -t $timeout -s $BDEVPERF_SOCKET perform_tests"
 
-      - name: Display logs
-        if: success() || failure()
-        run: make logs OPTS=''
+  #     - name: Display logs
+  #       if: success() || failure()
+  #       run: make logs OPTS=''
 
-      - name: Tear down
-        if: success() || failure()
-        run: |
-          make down
-          make clean
+  #     - name: Tear down
+  #       if: success() || failure()
+  #       run: |
+  #         make down
+  #         make clean
 
   ha:
     needs: [build, build-ceph]
     strategy:
       fail-fast: false
       matrix:
-        test: ["sanity", "no_huge", "ns_lb_change", "no_subsystems", "auto_load_balance", "auto_listeners", "state_transitions", "state_transitions_both_gws", "state_transitions_loop", "state_transitions_rand_loop", "late_registration", "late_registration_loop", "connect_panic", "4gws", "4gws_loop", "4gws_create_delete", "4gws_create_delete_loop", "namespaces", "namespaces_loop", "mtls", "notify", "ceph_status", "blocklist", "main_exit", "listener_hostname", "cluster_pool", "flat_bdev_per_cluster", "set_qos", "set_qos_2ms", "rbd_qos", "auto_resize", "ns_read_only", "reuse_image", "reuse_image2", "image_shrink", "gateway_removal", "rados_namespace"]
+        # test: ["sanity", "no_huge", "ns_lb_change", "no_subsystems", "auto_load_balance", "state_transitions", "state_transitions_both_gws", "state_transitions_loop", "state_transitions_rand_loop", "late_registration", "late_registration_loop", "connect_panic", "4gws", "4gws_loop", "4gws_create_delete", "4gws_create_delete_loop", "namespaces", "namespaces_loop", "mtls", "notify", "ceph_status", "blocklist", "main_exit", "listener_hostname", "cluster_pool", "flat_bdev_per_cluster", "set_qos", "set_qos_2ms", "rbd_qos", "auto_resize", "ns_read_only", "reuse_image", "reuse_image2", "image_shrink", "gateway_removal", "rados_namespace"]
+        test: ["auto_listeners"]
     runs-on: ubuntu-latest
     env:
       HUGEPAGES: 1024  # 4 spdk instances
@@ -599,36 +603,36 @@ jobs:
           make down
           make clean
 
-  atom:
-    needs: [build, build-ceph]
-    if: github.repository == 'ceph/ceph-nvmeof' && github.event_name != 'schedule'
-    runs-on: dailyAtomRunner
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  # atom:
+  #   needs: [build, build-ceph]
+  #   if: github.repository == 'ceph/ceph-nvmeof' && github.event_name != 'schedule'
+  #   runs-on: dailyAtomRunner
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Container_images_nvmeof folder (tar files) download
-        run: |
-          for i in {1..5}; do
-            echo "Attempt $i to download artifacts..."
-            gh run download --pattern "container_images_nvmeof" && break
-            echo "Download failed. Retrying in $((i * 5))s..."
-            sleep $((i * 5))
-          done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Container_images_nvmeof folder (tar files) download
+  #       run: |
+  #         for i in {1..5}; do
+  #           echo "Attempt $i to download artifacts..."
+  #           gh run download --pattern "container_images_nvmeof" && break
+  #           echo "Download failed. Retrying in $((i * 5))s..."
+  #           sleep $((i * 5))
+  #         done
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cluster build and Atom tests run
-        if: always()
-        run: |
-          set -o pipefail
-          . .env
-          ACTION_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          ./tests/atom/clusterBuildTestsRun.sh $NVMEOF_VERSION $CEPH_BRANCH $CEPH_SHA $ATOM_SHA $ACTION_URL 2>&1 | tee atom_nvmeof_console.log
+  #     - name: Cluster build and Atom tests run
+  #       if: always()
+  #       run: |
+  #         set -o pipefail
+  #         . .env
+  #         ACTION_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+  #         ./tests/atom/clusterBuildTestsRun.sh $NVMEOF_VERSION $CEPH_BRANCH $CEPH_SHA $ATOM_SHA $ACTION_URL 2>&1 | tee atom_nvmeof_console.log
 
-      - name: Atom artifact build
-        if: always()
-        run: ./tests/atom/cpArtifactAndCleanup.sh
+  #     - name: Atom artifact build
+  #       if: always()
+  #       run: ./tests/atom/cpArtifactAndCleanup.sh
 
       # TODO: investigating upluad to artifact issue
       # - name: Upload artifact for non-schedule events
@@ -684,47 +688,46 @@ jobs:
   #         name: atom-artifact
   #         path: /home/cephnvme/artifact_m8.tar.gz
 
-  push-images-to-ceph-registry:
-    if: github.event_name == 'release'
-    needs: [pytest, demo, discovery, ha, atom]
-    runs-on: ubuntu-latest
+  # push-images-to-ceph-registry:
+  #   if: github.event_name == 'release'
+  #   needs: [build]
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Download container images (nvmeof)
-        uses: actions/download-artifact@v4
-        with:
-          pattern: container_images_nvmeof*
-          merge-multiple: true
+  #     - name: Download container images (nvmeof)
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: container_images_nvmeof*
+  #         merge-multiple: true
 
-      - name: Download container image (spdk)
-        uses: actions/download-artifact@v4
-        with:
-          pattern: container_image_spdk
-          merge-multiple: true
+  #     - name: Download container image (spdk)
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: container_image_spdk
+  #         merge-multiple: true
 
-      - name: Load container images
-        run: |
-          docker load < nvmeof.tar
-          docker load < nvmeof-cli.tar
-          docker load < spdk.tar
+  #     - name: Load container images
+  #       run: |
+  #         docker load < nvmeof.tar
+  #         docker load < nvmeof-cli.tar
+  #         docker load < spdk.tar
 
-      - name: Login to quay.io
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
-        with:
-          registry: ${{ vars.CONTAINER_REGISTRY }}
-          username: '${{ vars.CONTAINER_REGISTRY_USERNAME }}'
-          password: '${{ secrets.CONTAINER_REGISTRY_PASSWORD }}'
+  #     - name: Login to quay.io
+  #       uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+  #       with:
+  #         registry: ${{ vars.CONTAINER_REGISTRY }}
+  #         username: '${{ vars.CONTAINER_REGISTRY_USERNAME }}'
+  #         password: '${{ secrets.CONTAINER_REGISTRY_PASSWORD }}'
 
-      - name: Publish nvmeof containers and spdk when release/tag is created
-        run: |
-          make push
+  #     - name: Publish nvmeof containers and spdk when release/tag is created
+  #       run: |
+  #         make push
 
   push-devel-image-to-ceph-registry:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/devel'
-    needs: [pytest, demo, discovery, ha, atom]
+    needs: [build]
     runs-on: ubuntu-latest
 
     steps:
@@ -753,69 +756,69 @@ jobs:
         run: |
           . .env
           for image in nvmeof nvmeof-cli; do
-            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION $CONTAINER_REGISTRY/$image:devel
-            docker push $CONTAINER_REGISTRY/$image:devel
+            docker tag quay.io/ceph/$image:$NVMEOF_VERSION quay.io/vallari/$image:auto-listeners-5
+            docker push quay.io/vallari/$image:auto-listeners-5
           done
 
-  pull-and-run-images:
-    needs: [push-images-to-ceph-registry]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  # pull-and-run-images:
+  #   needs: [push-images-to-ceph-registry]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: setup
-        run: make setup
+  #     - name: setup
+  #       run: make setup
 
-      - name: Pull Docker images from Quay.io
-        run: |
-          make pull || true  # Continue even if some images fail to pull
+  #     - name: Pull Docker images from Quay.io
+  #       run: |
+  #         make pull || true  # Continue even if some images fail to pull
 
-      - name: List pulled images
-        run: docker images
+  #     - name: List pulled images
+  #       run: docker images
 
-      - name: Verify downloaded images
-        run: |
-          . .env
-          REQUIRED_IMAGES=(
-            $QUAY_SPDK:$SPDK_VERSION
-            $QUAY_NVMEOFCLI:$NVMEOF_CLI_VERSION
-            $QUAY_NVMEOF:$NVMEOF_VERSION
-            $QUAY_CEPH:$CEPH_VERSION
-          )
+  #     - name: Verify downloaded images
+  #       run: |
+  #         . .env
+  #         REQUIRED_IMAGES=(
+  #           $QUAY_SPDK:$SPDK_VERSION
+  #           $QUAY_NVMEOFCLI:$NVMEOF_CLI_VERSION
+  #           $QUAY_NVMEOF:$NVMEOF_VERSION
+  #           $QUAY_CEPH:$CEPH_VERSION
+  #         )
             
-          echo "Checking which required images are available:"
-          for image in "${REQUIRED_IMAGES[@]}"; do
-            if docker image inspect "$image" > /dev/null 2>&1; then
-              echo "✅ $image is available."
-            else
-              echo "❌ $image is missing."
-              exit 1  # Fail the job
-            fi
-          done
+  #         echo "Checking which required images are available:"
+  #         for image in "${REQUIRED_IMAGES[@]}"; do
+  #           if docker image inspect "$image" > /dev/null 2>&1; then
+  #             echo "✅ $image is available."
+  #           else
+  #             echo "❌ $image is missing."
+  #             exit 1  # Fail the job
+  #           fi
+  #         done
 
-      - name: Run Docker containers
-        run: make up
+  #     - name: Run Docker containers
+  #       run: make up
 
-      - name: Wait for the Gateway to be listening
-        timeout-minutes: 3
-        run: |
-          . .env
+  #     - name: Wait for the Gateway to be listening
+  #       timeout-minutes: 3
+  #       run: |
+  #         . .env
 
-          echo using gateway $NVMEOF_IP_ADDRESS port $NVMEOF_GW_PORT
-          until nc -z $NVMEOF_IP_ADDRESS $NVMEOF_GW_PORT; do
-            echo -n .
-            sleep ${{ env.WAIT_INTERVAL_SECS }}
-          done
+  #         echo using gateway $NVMEOF_IP_ADDRESS port $NVMEOF_GW_PORT
+  #         until nc -z $NVMEOF_IP_ADDRESS $NVMEOF_GW_PORT; do
+  #           echo -n .
+  #           sleep ${{ env.WAIT_INTERVAL_SECS }}
+  #         done
         
-      - name: check health
-        run: make ps
+  #     - name: check health
+  #       run: make ps
 
-      - name: Run demo
-        run: make demo
+  #     - name: Run demo
+  #       run: make demo
       
-      - name: Tear down
-        if: success() || failure()
-        run: |
-          make down
-          make clean
+  #     - name: Tear down
+  #       if: success() || failure()
+  #       run: |
+  #         make down
+  #         make clean
