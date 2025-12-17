@@ -47,6 +47,12 @@ service Gateway {
 	// Changes subsystem key
 	rpc change_subsystem_key(change_subsystem_key_req) returns(req_status) {}
 
+	// Changes a subsystem network
+	rpc change_subsystem_network(change_subsystem_network_req) returns(req_status) {}
+
+	// Delete a subsystem network
+	rpc del_subsystem_network(del_subsystem_network_req) returns(req_status) {}
+
 	// List namespaces
 	rpc list_namespaces(list_namespaces_req) returns(namespaces_info) {}
 
@@ -263,6 +269,17 @@ message change_subsystem_key_req {
 	optional string dhchap_key = 2;
 }
 
+message change_subsystem_network_req {
+	string subsystem_nqn = 1;
+	string old_network_mask = 2;
+	string new_network_mask = 3;
+}
+
+message del_subsystem_network_req {
+	string subsystem_nqn = 1;
+	string network_mask = 2;
+}
+
 message list_namespaces_req {
 	string subsystem = 1;
 	optional uint32 nsid = 2;
@@ -471,6 +488,7 @@ message subsystem_cli {
 	optional bool has_dhchap_key = 10;
 	optional bool allow_any_host = 11;
 	optional bool created_without_key = 12;
+	optional string network_mask = 13;
 }
 
 message gateway_info {

@@ -1904,7 +1904,57 @@ class GatewayService(pb2_grpc.GatewayServicer):
         err_prefix = f"Failure creating subsystem {request.subsystem_nqn}: "
         return self.execute_grpc_function(self.create_subsystem_safe, request, context, err_prefix)
 
-    def _create_auto_listeners_safe(self, request, context=None):
+    def add_listeners(self, subsystem_nqn, ip_list, is_secure):
+        req_status = 0
+        for ip in ip_list:
+            hostname = self.host_name
+            port = os.getenv("NVMEOF_IO_PORT") or "4420"
+            adrfam = f'ipv{ip_address(ip).version}'
+            secure = is_secure
+            lstnr_req = pb2.create_listener_req(
+                nqn=subsystem_nqn,
+                host_name=hostname,
+                adrfam=adrfam,
+                traddr=ip,
+                trsvcid=int(port),
+                secure=secure,
+                verify_host_name=False)
+            rt = self.create_listener_safe(lstnr_req, None)
+            status = rt.status
+            if status != 0:
+                req_status = status
+                errmsg = f"Failure creating auto-listeners for {subsystem_nqn} " \
+                         f"subsystem: {rt.error_message}"
+                self.logger.error(errmsg)
+            else:
+                ip_ = GatewayUtils.escape_address_if_ipv6(ip)
+                self.logger.info(f'Automatically created listener at {ip_}:{port} for '
+                                 f'{subsystem_nqn}')
+        return req_status
+
+    def del_listeners(self, subsystem_nqn, ip_list):
+        req_status = 0
+        for ip in ip_list:
+            hostname = self.host_name
+            port = os.getenv("NVMEOF_IO_PORT") or "4420"
+            adrfam = f'ipv{ip_address(ip).version}'
+            lstnr_req = pb2.delete_listener_req(
+                nqn=subsystem_nqn,
+                host_name=hostname,
+                traddr=ip,
+                adrfam=adrfam,
+                trsvcid=int(port),
+                force=True)
+            rt = self.delete_listener_safe(lstnr_req, None)
+            status = rt.status
+            if status != 0:
+                req_status = status
+                errmsg = f"Failure deleting auto-listeners for {subsystem_nqn} " \
+                         f"subsystem: {rt.error_message}"
+                self.logger.error(errmsg)
+        return req_status
+
+    def _create_auto_listeners_safe(self, request):
         """
         Internal method - Automatically create listeners for IPs within subnet of 'network_mask'
         request: create_subsystem_req type
@@ -1949,8 +1999,142 @@ class GatewayService(pb2_grpc.GatewayServicer):
         return pb2.req_status(status=0, error_message=os.strerror(0))
 
     def create_auto_listeners(self, request):
+        """
+        Create auto-listeners for request.network_mask (Internal method)
+        request: create_subsystem_req type
+        """
         with self.rpc_lock:
-            return self._create_auto_listeners_safe(request, None)
+            return self._create_auto_listeners_safe(request)
+
+    def change_subsystem_network_safe(self, request, context):
+
+        assert self.rpc_lock.locked(), \
+            "RPC is unlocked when calling change_subsystem_network_safe()"
+
+        omap_lock = self.omap_lock.get_omap_lock_to_use(context)
+        with omap_lock:
+            subsys_entry = None
+            if context:
+                state = self.gateway_state.local.get_state()
+                subsys_key = GatewayState.build_subsystem_key(request.subsystem_nqn)
+                try:
+                    state_subsys = state[subsys_key]
+                    subsys_entry = json_format.Parse(state_subsys, pb2.create_subsystem_req(),
+                                                     ignore_unknown_fields=True)
+                except Exception:
+                    errmsg = f"Can't find entry for subsystem {request.subsystem_nqn}"
+                    self.logger.error(errmsg)
+                    return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+                assert subsys_entry, f"Can't find entry for subsystem {request.subsystem_nqn}"
+                try:
+                    old_network_mask = request.old_network_mask
+                    new_network_mask = request.new_network_mask
+                    existing_network_mask_ = subsys_entry.network_mask
+                    if not existing_network_mask_:
+                        errmsg = f"No existing network mask found for " \
+                                 f"subsystem {request.subsystem_nqn}"
+                        return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+                    existing_network_mask = set(existing_network_mask_.split(","))
+                    if old_network_mask not in existing_network_mask:
+                        errmsg = f"Network mask {request.network_mask} not " \
+                                 f"found for subsystem {request.subsystem_nqn}"
+                        return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+                    # change listeners
+                    found_old_ips = set(NICS(self.logger, True).get_ips_in_subnet(old_network_mask))
+                    found_new_ips = set(NICS(self.logger, True).get_ips_in_subnet(new_network_mask))
+                    to_remove = found_old_ips - found_new_ips
+                    to_add = found_new_ips - found_old_ips
+                    req_status_del = self.del_listeners(request.subsystem_nqn, to_remove)
+                    req_status_add = self.add_listeners(request.subsystem_nqn, to_add,
+                                                        subsys_entry.secure_listeners)
+                    req_status = req_status_del and req_status_del
+                    if req_status_del == 0 and req_status_add == 0:
+                        existing_network_mask.remove(old_network_mask)
+                        existing_network_mask.add(new_network_mask)
+                        subsys_entry.network_mask = ",".join(existing_network_mask)
+                        json_req = json_format.MessageToJson(
+                            subsys_entry, preserving_proto_field_name=True,
+                            including_default_value_fields=True)
+                        self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
+                except Exception as ex:
+                    errmsg = f"Failure occured:\n{ex}"
+                    self.logger.error(errmsg)
+                    return pb2.req_status(status=errno.EINVAL, error_message=errmsg)
+        err_msg = os.strerror(0)
+        if req_status != 0:
+            err_msg = f"Failed to change network for subsystem {request.subsystem_nqn}"
+        return pb2.req_status(status=req_status, error_message=err_msg)
+
+    def change_subsystem_network(self, request, context=None):
+        """Change a network_mask on subsystem"""
+        err_prefix = f"Failure changing network {request.network_mask} for " \
+                     f"subsystem {request.subsystem_nqn}: "
+        self.logger.info(f"VALLARI_DEBUG: here1-change {context=}")
+        return self.execute_grpc_function(self.change_subsystem_network_safe, request,
+                                          context, err_prefix)
+
+    def del_subsystem_network_safe(self, request, context):
+
+        self.logger.info(f"VALLARI_DEBUG: here2 {context=}")
+
+        assert self.rpc_lock.locked(), \
+            "RPC is unlocked when calling del_subsystem_network_safe()"
+
+        req_status = 0
+        omap_lock = self.omap_lock.get_omap_lock_to_use(context)
+        with omap_lock:
+            subsys_entry = None
+            if context:
+                state = self.gateway_state.local.get_state()
+                subsys_key = GatewayState.build_subsystem_key(request.subsystem_nqn)
+                try:
+                    state_subsys = state[subsys_key]
+                    subsys_entry = json_format.Parse(state_subsys, pb2.create_subsystem_req(),
+                                                     ignore_unknown_fields=True)
+                except Exception:
+                    errmsg = f"Can't find entry for subsystem {request.subsystem_nqn}"
+                    self.logger.error(errmsg)
+                    return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+                assert subsys_entry, f"Can't find entry for subsystem {request.subsystem_nqn}"
+                try:
+                    network_to_delete = request.network_mask
+                    existing_network_mask_ = subsys_entry.network_mask
+                    if not existing_network_mask_:
+                        errmsg = f"No existing network mask found for " \
+                                 f"subsystem {request.subsystem_nqn}"
+                        return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+                    existing_network_mask = set(existing_network_mask_.split(","))
+                    if network_to_delete not in existing_network_mask:
+                        errmsg = f"Network mask {request.network_mask} not " \
+                                 f"found for subsystem {request.subsystem_nqn}"
+                        return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+
+                    found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_delete)
+                    req_status = self.del_listeners(request.subsystem_nqn, found_ips)
+                    if req_status == 0:
+                        # remove listener from subsystem's OMAP
+                        existing_network_mask.remove(network_to_delete)
+                        subsys_entry.network_mask = ",".join(existing_network_mask)
+                        json_req = json_format.MessageToJson(
+                            subsys_entry, preserving_proto_field_name=True,
+                            including_default_value_fields=True)
+                        self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
+                except Exception as ex:
+                    errmsg = f"Failure occured:\n{ex}"
+                    self.logger.error(errmsg)
+                    return pb2.req_status(status=errno.EINVAL, error_message=errmsg)
+        err_msg = os.strerror(0)
+        if req_status != 0:
+            err_msg = f"Failed to delete network for subsystem {request.subsystem_nqn}"
+        return pb2.req_status(status=req_status, error_message=err_msg)
+
+    def del_subsystem_network(self, request, context=None):
+        """Delete a network_mask on subsystem"""
+        err_prefix = f"Failure deleting network {request.network_mask} for " \
+                     f"subsystem {request.subsystem_nqn}: "
+        self.logger.info(f"VALLARI_DEBUG: here1 {context=}")
+        return self.execute_grpc_function(self.del_subsystem_network_safe, request,
+                                          context, err_prefix)
 
     def get_subsystem_namespaces(self, nqn) -> list:
         ns_list = []
