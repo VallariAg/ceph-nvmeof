@@ -1265,7 +1265,6 @@ class GatewayClient:
                  help="Subsystem NQN",
                  required=True),
         argument("--network-mask",
-                 "-k",
                  help="Network mask to delete",
                  required=True),
     ]
@@ -1275,11 +1274,9 @@ class GatewayClient:
                  help="Subsystem NQN",
                  required=True),
         argument("--old-network-mask",
-                 "-k",
                  help="Existing network mask to change",
                  required=True),
         argument("--new-network-mask",
-                 "-k",
                  help="New network mask",
                  required=True),
     ]

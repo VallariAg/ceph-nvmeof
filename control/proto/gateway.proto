@@ -488,6 +488,7 @@ message subsystem_cli {
 	optional bool has_dhchap_key = 10;
 	optional bool allow_any_host = 11;
 	optional bool created_without_key = 12;
+	optional string network_mask = 13;
 }
 
 message gateway_info {
