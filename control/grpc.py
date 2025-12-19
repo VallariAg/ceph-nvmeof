@@ -1945,7 +1945,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 adrfam=adrfam,
                 trsvcid=int(port),
                 force=True)
-            rt = self.delete_listener(lstnr_req, None)
+            rt = self.delete_listener_safe(lstnr_req, None)
             status = rt.status
             if status != 0:
                 req_status = status
@@ -2007,6 +2007,10 @@ class GatewayService(pb2_grpc.GatewayServicer):
             return self._create_auto_listeners_safe(request)
 
     def change_subsystem_network_safe(self, request, context):
+
+        assert self.rpc_lock.locked(), \
+            "RPC is unlocked when calling change_subsystem_network_safe()"
+
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
             subsys_entry = None
@@ -2065,10 +2069,17 @@ class GatewayService(pb2_grpc.GatewayServicer):
         """Change a network_mask on subsystem"""
         err_prefix = f"Failure changing network {request.network_mask} for " \
                      f"subsystem {request.subsystem_nqn}: "
+        self.logger.info(f"VALLARI_DEBUG: here1-change {context=}")
         return self.execute_grpc_function(self.change_subsystem_network_safe, request,
                                           context, err_prefix)
 
     def del_subsystem_network_safe(self, request, context):
+
+        self.logger.info(f"VALLARI_DEBUG: here2 {context=}")
+
+        assert self.rpc_lock.locked(), \
+            "RPC is unlocked when calling del_subsystem_network_safe()"
+
         req_status = 0
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
@@ -2121,6 +2132,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
         """Delete a network_mask on subsystem"""
         err_prefix = f"Failure deleting network {request.network_mask} for " \
                      f"subsystem {request.subsystem_nqn}: "
+        self.logger.info(f"VALLARI_DEBUG: here1 {context=}")
         return self.execute_grpc_function(self.del_subsystem_network_safe, request,
                                           context, err_prefix)
 

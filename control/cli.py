@@ -1170,7 +1170,7 @@ class GatewayClient:
         if args.format == "text" or args.format == "plain":
             if ret.status == 0:
                 out_func(f"Network mask {args.network_mask} deleted for subsystem "
-                         f"{args.subsystem_nqn}: Successful")
+                         f"{args.subsystem}: Successful")
             else:
                 err_func(f"{ret.error_message}")
         elif args.format == "json" or args.format == "yaml":
