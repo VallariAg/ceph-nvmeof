@@ -1118,24 +1118,23 @@ class GatewayClient:
 
         return ret.status
 
-    def subsystem_change_network_mask(self, args):
-        """Change subsystem's network mask"""
+    def subsystem_add_network_mask(self, args):
+        """Add subsystem's network mask"""
 
         out_func, err_func, _ = self.get_output_functions(args)
 
-        req = pb2.change_subsystem_network_req(subsystem_nqn=args.subsystem,
-                                               old_network_mask=args.old_network_mask,
-                                               new_network_mask=args.new_network_mask)
+        req = pb2.add_subsystem_network_req(subsystem_nqn=args.subsystem,
+                                            network_mask=args.network_mask)
         try:
-            ret = self.stub.change_subsystem_network(req)
+            ret = self.stub.add_subsystem_network(req)
         except Exception as ex:
-            errmsg = f"Failure in changing network for subsystem {args.subsystem}"
+            errmsg = f"Failure in adding network for subsystem {args.subsystem}"
             ret = pb2.req_status(status=errno.EINVAL, error_message=f"{errmsg}:\n{ex}")
 
         if args.format == "text" or args.format == "plain":
             if ret.status == 0:
-                out_func(f"Network mask {args.old_network_mask} changed to {args.new_network_mask} "
-                         f"for subsystem {args.subsystem}: Successful")
+                out_func(f"Network mask {args.network_mask} added to subsystem "
+                         f"{args.subsystem}: Successful")
             else:
                 err_func(f"{ret.error_message}")
         elif args.format == "json" or args.format == "yaml":
@@ -1265,19 +1264,16 @@ class GatewayClient:
                  help="Subsystem NQN",
                  required=True),
         argument("--network-mask",
-                 help="Network mask to delete",
+                 help="Existing network mask to delete",
                  required=True),
     ]
-    subsys_change_network_args = [
+    subsys_add_network_args = [
         argument("--subsystem",
                  "-n",
                  help="Subsystem NQN",
                  required=True),
-        argument("--old-network-mask",
-                 help="Existing network mask to change",
-                 required=True),
-        argument("--new-network-mask",
-                 help="New network mask",
+        argument("--network-mask",
+                 help="New network mask to add",
                  required=True),
     ]
     subsystem_actions = []
@@ -1296,8 +1292,8 @@ class GatewayClient:
     subsystem_actions.append({"name": "del_key",
                               "args": subsys_del_key_args,
                               "help": "Delete subsystem inband authentication key"})
-    subsystem_actions.append({"name": "change_network",
-                              "args": subsys_change_network_args,
+    subsystem_actions.append({"name": "add_network",
+                              "args": subsys_add_network_args,
                               "help": "Change a network mask in the subsystem"})
     subsystem_actions.append({"name": "del_network",
                               "args": subsys_del_network_args,
@@ -1317,8 +1313,8 @@ class GatewayClient:
             return self.subsystem_change_key(args)
         elif args.action == "del_key":
             return self.subsystem_del_key(args)
-        elif args.action == "change_network":
-            return self.subsystem_change_network_mask(args)
+        elif args.action == "add_network":
+            return self.subsystem_add_network_mask(args)
         elif args.action == "del_network":
             return self.subsystem_del_network_mask(args)
         if not args.action:

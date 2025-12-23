@@ -48,7 +48,7 @@ service Gateway {
 	rpc change_subsystem_key(change_subsystem_key_req) returns(req_status) {}
 
 	// Changes a subsystem network
-	rpc change_subsystem_network(change_subsystem_network_req) returns(req_status) {}
+	rpc add_subsystem_network(add_subsystem_network_req) returns(req_status) {}
 
 	// Delete a subsystem network
 	rpc del_subsystem_network(del_subsystem_network_req) returns(req_status) {}
@@ -269,10 +269,9 @@ message change_subsystem_key_req {
 	optional string dhchap_key = 2;
 }
 
-message change_subsystem_network_req {
+message add_subsystem_network_req {
 	string subsystem_nqn = 1;
-	string old_network_mask = 2;
-	string new_network_mask = 3;
+	string network_mask = 2;
 }
 
 message del_subsystem_network_req {
