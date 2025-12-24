@@ -2091,7 +2091,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_add)
                 req_status = self.add_listeners(request.subsystem_nqn, found_ips,
                                                 subsys_entry.secure_listeners)
-                if req_status == 0:
+                if context and req_status == 0:
                     # remove listener from subsystem's OMAP
                     existing_network_masks.add(network_to_add)
                     subsys_entry.network_mask = ",".join(existing_network_masks)
@@ -2154,7 +2154,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
 
                 found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_delete)
                 req_status = self.del_listeners(request.subsystem_nqn, found_ips)
-                if req_status == 0:
+                if context and req_status == 0:
                     # remove listener from subsystem's OMAP
                     existing_network_mask.remove(network_to_delete)
                     subsys_entry.network_mask = ",".join(existing_network_mask)
