@@ -1235,3 +1235,13 @@ class GatewayServer:
                     req = json_format.Parse(val, pb2.change_subsystem_key_req(),
                                             ignore_unknown_fields=True)
                     self.gateway_rpc.change_subsystem_key(req)
+            elif key.startswith(GatewayState.SUBSYSTEM_NETWORK_ADD_PREFIX):
+                if is_add_req:
+                    req = json_format.Parse(val, pb2.add_subsystem_network_req(),
+                                            ignore_unknown_fields=True)
+                    self.gateway_rpc.add_subsystem_network(req)
+            elif key.startswith(GatewayState.SUBSYSTEM_NETWORK_DEL_PREFIX):
+                if is_add_req:
+                    req = json_format.Parse(val, pb2.del_subsystem_network_req(),
+                                            ignore_unknown_fields=True)
+                    self.gateway_rpc.del_subsystem_network(req)
