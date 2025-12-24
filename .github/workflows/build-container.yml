@@ -752,8 +752,8 @@ jobs:
         run: |
           . .env
           for image in nvmeof nvmeof-cli; do
-            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION quay.io/vallari/$image:default-listeners-edit-12
-            docker push quay.io/vallari/$image:default-listeners-edit-12
+            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION quay.io/vallari/$image:default-listeners-edit-13
+            docker push quay.io/vallari/$image:default-listeners-edit-13
           done
 
   # pull-and-run-images:
