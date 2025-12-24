@@ -35,8 +35,8 @@ class GatewayState(ABC):
     NAMESPACE_PREFIX = "namespace" + OMAP_KEY_DELIMITER
     SUBSYSTEM_PREFIX = "subsystem" + OMAP_KEY_DELIMITER
     SUBSYSTEM_NETWORK_MASK = "network-mask-subsystem" + OMAP_KEY_DELIMITER
-    SUBSYSTEM_NETWORK_ADD_PREFIX = "subsystem-network-add" + OMAP_KEY_DELIMITER
-    SUBSYSTEM_NETWORK_DEL_PREFIX = "subsystem-network-del" + OMAP_KEY_DELIMITER
+    SUBSYSTEM_NETWORK_ADD_PREFIX = "net-add-subsystem" + OMAP_KEY_DELIMITER
+    SUBSYSTEM_NETWORK_DEL_PREFIX = "net-del-subsystem" + OMAP_KEY_DELIMITER
     SUBSYSTEM_KEY_PREFIX = "key-subsystem" + OMAP_KEY_DELIMITER
     HOST_PREFIX = "host" + OMAP_KEY_DELIMITER
     HOST_KEY_PREFIX = "key-host" + OMAP_KEY_DELIMITER
@@ -1520,10 +1520,12 @@ class GatewayStateHandler:
         new_network = str(new_req.network_mask).split(',')
         old_req.network_mask = new_req.network_mask
         if old_req != new_req:
+            self.logger.info("VALLARI_DEBUG: more than network_mask changed!")
             # Something besides the keys is different
             return (False, None, None)
         add = list(set(new_network) - set(old_network))
         delete = list(set(old_network) - set(new_network))
+        self.logger.info(f"VALLARI_DEBUG: {add=} {delete=}")
         return (True, add, delete)
 
     def break_namespace_attribute_key(self, prefix: str, ns_key: str):
@@ -1755,11 +1757,13 @@ class GatewayStateHandler:
                         if should_process_n:
                             self.logger.debug(f"Found {key} where only the network has changed.")
                             only_subsystem_network_changed.append((key, add_n, del_n))
+                self.logger.info(f"VALLARI_DEBUG: {only_subsystem_network_changed=}")
                 for key in added.keys():
                     if key.startswith(GatewayState.SUBSYSTEM_PREFIX):
                         subsystem = self._parse_subsystem_req(omap_state_dict[key])
                         if subsystem.network_mask:
                             auto_listener_add.append(subsystem)
+                self.logger.info(f"VALLARI_DEBUG: {auto_listener_add=}")
 
                 for ns_key, new_lb_grp in ns_lb_group_changed:
                     ns_nqn = None
@@ -1977,6 +1981,7 @@ class GatewayStateHandler:
                     autolistener_key = GatewayState.build_subsystem_network_mask_key(subsystem_nqn)
                     json_req = json_format.MessageToJson(subsystem_req)
                     added[autolistener_key] = json_req
+
                 if len(ns_lb_group_changed) > 0 or len(only_host_key_changed) > 0 or \
                    len(only_subsystem_key_changed) > 0 or len(ns_visibility_changed) > 0 or \
                    len(ns_location_changed) > 0 or len(ns_trash_image_changed) > 0 or \
@@ -2040,6 +2045,10 @@ class GatewayStateHandler:
         if is_add_req:
             for prefix in prefix_list:
                 component_update = grouped_state_update.get(prefix, {})
+                if prefix in [GatewayState.SUBSYSTEM_NETWORK_ADD_PREFIX,
+                              GatewayState.SUBSYSTEM_NETWORK_MASK,
+                              GatewayState.SUBSYSTEM_NETWORK_DEL_PREFIX]:
+                    self.logger.info(f'VALLARI_DEBUG {prefix=} {component_update=}')
                 if component_update:
                     self.gateway_rpc_caller(component_update, True, self.break_update_interval)
         else:
