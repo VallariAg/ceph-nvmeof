@@ -445,6 +445,7 @@ message subsystem {
 	optional uint32 max_cntlid = 10;
 	repeated namespace namespaces = 11;
 	optional bool has_dhchap_key = 12;
+	optional string network_mask = 13;
 }
 
 message listen_address {

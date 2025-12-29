@@ -1025,7 +1025,8 @@ class GatewayClient:
                                   s.namespace_count,
                                   s.max_namespaces,
                                   allow_any,
-                                  has_dhchap]
+                                  has_dhchap,
+                                  s.network_mask]
                     if created_without_key:
                         one_subsys.append("Yes" if s.created_without_key else "No")
                     subsys_list.append(one_subsys)
@@ -1036,7 +1037,7 @@ class GatewayClient:
                         table_format = "plain"
                     headers_list = ["Subtype", "NQN", "Serial\nNumber", "Controller IDs",
                                     "Namespace\nCount", "Max\nNamespaces", "Allow\nAny Host",
-                                    "DHCHAP\nKey"]
+                                    "DHCHAP\nKey", "Network\nMask"]
                     if created_without_key:
                         headers_list.append("Created\nWithout Key")
                     subsys_out = tabulate(subsys_list,

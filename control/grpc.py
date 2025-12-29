@@ -889,6 +889,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
         self.cluster_allocator = get_cluster_allocator(config, self)
         self.subsys_max_ns = {}
         self.subsys_serial = {}
+        self.subsys_network = {}
         self.subsystems_cache = SubsystemsCache()
         self.host_info = SubsystemHostAuth()
         self.up_and_running = True
@@ -1826,6 +1827,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 self.logger.debug(f"create_subsystem {request.subsystem_nqn}: {ret}")
                 self.subsys_max_ns[request.subsystem_nqn] = request.max_namespaces
                 self.subsys_serial[request.subsystem_nqn] = request.serial_number
+                self.subsys_network[request.subsystem_nqn] = request.network_mask
 
                 dhchap_key_for_omap = request.dhchap_key
                 key_encrypted_for_omap = False
@@ -1956,7 +1958,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 self.logger.error(errmsg)
             else:
                 ip_ = GatewayUtils.escape_address_if_ipv6(ip)
-                self.logger.info(f"Deleted auto-listener at {ip_}:{port}")
+                self.logger.info(f'Automatically deleted listener at {ip_}:{port} for '
+                                 f'{subsystem_nqn}')
         return req_status
 
     def _create_auto_listeners_safe(self, request):
@@ -2019,10 +2022,12 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_add)
                 req_status = self.add_listeners(request.subsystem_nqn, found_ips,
                                                 subsys_entry.secure_listeners)
+                existing_network_masks.add(network_to_add)
+                new_network_mask = ",".join(existing_network_masks)
+                self.subsys_network[request.subsystem_nqn] = new_network_mask
                 if context and req_status == 0:
                     # remove listener from subsystem's OMAP
-                    existing_network_masks.add(network_to_add)
-                    subsys_entry.network_mask = ",".join(existing_network_masks)
+                    subsys_entry.network_mask = new_network_mask
                     json_req = json_format.MessageToJson(
                         subsys_entry, preserving_proto_field_name=True,
                         including_default_value_fields=True)
@@ -2079,10 +2084,12 @@ class GatewayService(pb2_grpc.GatewayServicer):
 
                 found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_delete)
                 req_status = self.del_listeners(request.subsystem_nqn, found_ips)
+                existing_network_mask.remove(network_to_delete)
+                new_network_mask = ",".join(existing_network_mask)
+                self.subsys_network[request.subsystem_nqn] = new_network_mask
                 if context and req_status == 0:
                     # remove listener from subsystem's OMAP
-                    existing_network_mask.remove(network_to_delete)
-                    subsys_entry.network_mask = ",".join(existing_network_mask)
+                    subsys_entry.network_mask = new_network_mask
                     json_req = json_format.MessageToJson(
                         subsys_entry, preserving_proto_field_name=True,
                         including_default_value_fields=True)
@@ -2164,6 +2171,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 ret = self.spdk_rpc_client.nvmf_delete_subsystem(nqn=request.subsystem_nqn)
                 self.subsys_max_ns.pop(request.subsystem_nqn)
                 self.subsys_serial.pop(request.subsystem_nqn)
+                self.subsys_network.pop(request.subsystem_nqn)
                 if request.subsystem_nqn in self.subsystem_listeners:
                     self.subsystem_listeners.pop(request.subsystem_nqn, None)
                 self.host_info.clean_subsystem(request.subsystem_nqn)
@@ -6223,12 +6231,16 @@ class GatewayService(pb2_grpc.GatewayServicer):
         if not ret:
             ret = []
         for s in ret:
+            self.logger.info(f"VALLARI_DEBUG list_subsystem {s=}")
             try:
                 if s["subtype"] == "NVMe":
                     ns_count = len(s["namespaces"])
                     if not ns_count:
                         self.subsystem_nsid_bdev_and_uuid.remove_namespace(s["nqn"])
                     s["namespace_count"] = ns_count
+                    s["network_mask"] = ""
+                    if s["nqn"] in self.subsys_network:
+                        s["network_mask"] = self.subsys_network[request.subsystem_nqn]
                     s["enable_ha"] = True
                     s["has_dhchap_key"] = self.host_info.does_subsystem_have_dhchap_key(s["nqn"])
                     s["created_without_key"] = \
@@ -6246,6 +6258,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     s["namespace_count"] = 0
                     s["enable_ha"] = False
                     s["has_dhchap_key"] = False
+                    s["network_mask"] = ""
                 # Parse the JSON dictionary into the protobuf message
                 subsystem = pb2.subsystem_cli()
                 json_format.Parse(json.dumps(s), subsystem, ignore_unknown_fields=True)
