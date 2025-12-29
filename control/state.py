@@ -1985,8 +1985,8 @@ class GatewayStateHandler:
                                     including_default_value_fields=True)
                                 added[ndel_key] = json_req
                         except Exception:
-                            self.logger.exception("Exception formatting change subsystem "
-                                                  "key request")
+                            self.logger.exception("Exception formatting add/del subsystem "
+                                                  "network request")
                 for subsystem_req in auto_listener_add:
                     subsystem_nqn = subsystem_req.subsystem_nqn
                     autolistener_key = GatewayState.build_subsystem_network_mask_key(subsystem_nqn)

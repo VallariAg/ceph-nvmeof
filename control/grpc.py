@@ -1998,7 +1998,6 @@ class GatewayService(pb2_grpc.GatewayServicer):
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
             subsys_entry = None
-            # if context:
             state = self.gateway_state.local.get_state()
             subsys_key = GatewayState.build_subsystem_key(request.subsystem_nqn)
             try:
@@ -2015,23 +2014,28 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 existing_network_mask_ = subsys_entry.network_mask
                 existing_network_masks = set(existing_network_mask_.split(","))
                 if network_to_add in existing_network_masks:
-                    errmsg = f"Network mask alreafy exists for " \
+                    errmsg = f"Network mask already exists for " \
                              f"subsystem {request.subsystem_nqn}"
                     return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
 
                 found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_add)
                 req_status = self.add_listeners(request.subsystem_nqn, found_ips,
                                                 subsys_entry.secure_listeners)
-                existing_network_masks.add(network_to_add)
-                new_network_mask = ",".join(existing_network_masks)
-                self.subsys_network[request.subsystem_nqn] = new_network_mask
-                if context and req_status == 0:
-                    # remove listener from subsystem's OMAP
-                    subsys_entry.network_mask = new_network_mask
-                    json_req = json_format.MessageToJson(
-                        subsys_entry, preserving_proto_field_name=True,
-                        including_default_value_fields=True)
-                    self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
+                if req_status != 0:
+                    self.logger.info(f'Addition of network {request.network_mask} '
+                                     f'(IPs: {found_ips}) to subsystem {request.subsystem_nqn} '
+                                     'failed with non-zero status code.')
+                else:
+                    existing_network_masks.add(network_to_add)
+                    new_network_mask = ",".join(existing_network_masks)
+                    self.subsys_network[request.subsystem_nqn] = new_network_mask
+                    if context:
+                        # remove listener from subsystem's OMAP
+                        subsys_entry.network_mask = new_network_mask
+                        json_req = json_format.MessageToJson(
+                            subsys_entry, preserving_proto_field_name=True,
+                            including_default_value_fields=True)
+                        self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
             except Exception as ex:
                 errmsg = f"Failure occured:\n{ex}"
                 self.logger.error(errmsg)
@@ -2057,7 +2061,6 @@ class GatewayService(pb2_grpc.GatewayServicer):
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
             subsys_entry = None
-            # if context:
             state = self.gateway_state.local.get_state()
             subsys_key = GatewayState.build_subsystem_key(request.subsystem_nqn)
             try:
@@ -2084,16 +2087,21 @@ class GatewayService(pb2_grpc.GatewayServicer):
 
                 found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_delete)
                 req_status = self.del_listeners(request.subsystem_nqn, found_ips)
-                existing_network_mask.remove(network_to_delete)
-                new_network_mask = ",".join(existing_network_mask)
-                self.subsys_network[request.subsystem_nqn] = new_network_mask
-                if context and req_status == 0:
-                    # remove listener from subsystem's OMAP
-                    subsys_entry.network_mask = new_network_mask
-                    json_req = json_format.MessageToJson(
-                        subsys_entry, preserving_proto_field_name=True,
-                        including_default_value_fields=True)
-                    self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
+                if req_status != 0:
+                    self.logger.info(f'Deletion of network {request.network_mask} '
+                                     f'(IPs: {found_ips}) to subsystem {request.subsystem_nqn} '
+                                     'failed with non-zero status code.')
+                else:
+                    existing_network_mask.remove(network_to_delete)
+                    new_network_mask = ",".join(existing_network_mask)
+                    self.subsys_network[request.subsystem_nqn] = new_network_mask
+                    if context:
+                        # remove listener from subsystem's OMAP
+                        subsys_entry.network_mask = new_network_mask
+                        json_req = json_format.MessageToJson(
+                            subsys_entry, preserving_proto_field_name=True,
+                            including_default_value_fields=True)
+                        self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
             except Exception as ex:
                 errmsg = f"Failure occured:\n{ex}"
                 self.logger.error(errmsg)

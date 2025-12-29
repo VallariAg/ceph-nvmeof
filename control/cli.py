@@ -1158,7 +1158,7 @@ class GatewayClient:
         return ret.status
 
     def subsystem_del_network_mask(self, args):
-        """Change subsystem's network mask"""
+        """Delete subsystem's network mask"""
 
         out_func, err_func, _ = self.get_output_functions(args)
 
@@ -1298,7 +1298,7 @@ class GatewayClient:
                               "help": "Delete subsystem inband authentication key"})
     subsystem_actions.append({"name": "add_network",
                               "args": subsys_add_network_args,
-                              "help": "Change a network mask in the subsystem"})
+                              "help": "Add a network mask in the subsystem"})
     subsystem_actions.append({"name": "del_network",
                               "args": subsys_del_network_args,
                               "help": "Delete a network mask in the subsystem"})

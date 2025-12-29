@@ -47,7 +47,7 @@ service Gateway {
 	// Changes subsystem key
 	rpc change_subsystem_key(change_subsystem_key_req) returns(req_status) {}
 
-	// Changes a subsystem network
+	// Add a subsystem network
 	rpc add_subsystem_network(add_subsystem_network_req) returns(req_status) {}
 
 	// Delete a subsystem network
