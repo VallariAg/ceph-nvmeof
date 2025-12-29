@@ -1018,6 +1018,9 @@ class GatewayClient:
                     ctrls_id = f"{s.min_cntlid}-{s.max_cntlid}"
                     has_dhchap = "Yes" if s.has_dhchap_key else "No"
                     allow_any = "Yes" if s.allow_any_host else "No"
+                    net_mask = s.network_mask
+                    if net_mask:
+                        net_mask = net_mask.replace(',', ',\n')
                     one_subsys = [s.subtype,
                                   s.nqn,
                                   s.serial_number,
@@ -1026,7 +1029,7 @@ class GatewayClient:
                                   s.max_namespaces,
                                   allow_any,
                                   has_dhchap,
-                                  s.network_mask]
+                                  net_mask]
                     if created_without_key:
                         one_subsys.append("Yes" if s.created_without_key else "No")
                     subsys_list.append(one_subsys)

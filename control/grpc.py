@@ -6240,7 +6240,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     s["namespace_count"] = ns_count
                     s["network_mask"] = ""
                     if s["nqn"] in self.subsys_network:
-                        s["network_mask"] = self.subsys_network[request.subsystem_nqn]
+                        s["network_mask"] = self.subsys_network[s['nqn']]
                     s["enable_ha"] = True
                     s["has_dhchap_key"] = self.host_info.does_subsystem_have_dhchap_key(s["nqn"])
                     s["created_without_key"] = \
