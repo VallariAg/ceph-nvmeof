@@ -2011,8 +2011,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
             assert subsys_entry, f"Can't find entry for subsystem {request.subsystem_nqn}"
             try:
                 network_to_add = request.network_mask
-                existing_network_mask_ = subsys_entry.network_mask
-                existing_network_masks = set(existing_network_mask_.split(","))
+                existing_network_mask_ = subsys_entry.network_mask.split(",")
+                existing_network_masks = set(net for net in existing_network_mask_ if net)
                 if network_to_add in existing_network_masks:
                     errmsg = f"Network mask already exists for " \
                              f"subsystem {request.subsystem_nqn}"
@@ -2074,12 +2074,12 @@ class GatewayService(pb2_grpc.GatewayServicer):
             assert subsys_entry, f"Can't find entry for subsystem {request.subsystem_nqn}"
             try:
                 network_to_delete = request.network_mask
-                existing_network_mask_ = subsys_entry.network_mask
-                if not existing_network_mask_:
+                if not subsys_entry.network_mask:
                     errmsg = f"No existing network mask found for " \
                              f"subsystem {request.subsystem_nqn}"
                     return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
-                existing_network_mask = set(existing_network_mask_.split(","))
+                existing_network_mask_ = subsys_entry.network_mask.split(",")
+                existing_network_mask = set(net for net in existing_network_mask_ if net)
                 if network_to_delete not in existing_network_mask:
                     errmsg = f"Network mask {request.network_mask} not " \
                              f"found for subsystem {request.subsystem_nqn}"
@@ -6239,7 +6239,6 @@ class GatewayService(pb2_grpc.GatewayServicer):
         if not ret:
             ret = []
         for s in ret:
-            self.logger.info(f"VALLARI_DEBUG list_subsystem {s=}")
             try:
                 if s["subtype"] == "NVMe":
                     ns_count = len(s["namespaces"])

@@ -1020,7 +1020,7 @@ class GatewayClient:
                     allow_any = "Yes" if s.allow_any_host else "No"
                     net_mask = s.network_mask
                     if net_mask:
-                        net_mask = net_mask.replace(',', ',\n')
+                        net_mask = net_mask.replace(',', '\n')
                     one_subsys = [s.subtype,
                                   s.nqn,
                                   s.serial_number,
