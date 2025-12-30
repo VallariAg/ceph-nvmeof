@@ -2036,6 +2036,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
                             subsys_entry, preserving_proto_field_name=True,
                             including_default_value_fields=True)
                         self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
+                    self.logger.info(f"Added network {request.network_mask} for subsystem"
+                                     f"{request.subsystem_nqn}")
             except Exception as ex:
                 errmsg = f"Failure occured:\n{ex}"
                 self.logger.error(errmsg)
@@ -2073,6 +2075,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
             assert subsys_entry, f"Can't find entry for subsystem {request.subsystem_nqn}"
             try:
+                # TODO: fix "del_network" from gw1 -> "subsystem list" from gw2
                 network_to_delete = request.network_mask
                 if not subsys_entry.network_mask:
                     errmsg = f"No existing network mask found for " \
@@ -2094,7 +2097,11 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 else:
                     existing_network_mask.remove(network_to_delete)
                     new_network_mask = ",".join(existing_network_mask)
+                    self.logger.info(f"VALLARI_DEBUG: 1 {existing_network_mask=}k")
+                    self.logger.info(f"VALLARI_DEBUG: 2 {new_network_mask=}l")
                     self.subsys_network[request.subsystem_nqn] = new_network_mask
+                    self.logger.info("VALLARI_DEBUG: 3 "
+                                     f"{self.subsys_network[request.subsystem_nqn]}p")
                     if context:
                         # remove listener from subsystem's OMAP
                         subsys_entry.network_mask = new_network_mask
@@ -2102,6 +2109,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
                             subsys_entry, preserving_proto_field_name=True,
                             including_default_value_fields=True)
                         self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
+                    self.logger.info(f"Removed network {network_to_delete} for subsystem"
+                                     f"{request.subsystem_nqn}")
             except Exception as ex:
                 errmsg = f"Failure occured:\n{ex}"
                 self.logger.error(errmsg)
@@ -6248,6 +6257,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     s["network_mask"] = ""
                     if s["nqn"] in self.subsys_network:
                         s["network_mask"] = self.subsys_network[s['nqn']]
+                    if request.subsystem_nqn:
+                        self.logger.info(f"VALLARI_DEBUG 5: {s['nqn']}"
+                                         f"{self.subsys_network[s['nqn']]}")
                     s["enable_ha"] = True
                     s["has_dhchap_key"] = self.host_info.does_subsystem_have_dhchap_key(s["nqn"])
                     s["created_without_key"] = \
