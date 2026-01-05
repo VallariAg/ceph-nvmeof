@@ -1970,12 +1970,12 @@ class GatewayService(pb2_grpc.GatewayServicer):
 
         req_status = 0
         network_mask_subnets = request.network_mask
-        if network_mask_subnets:
-            subnet_list = network_mask_subnets.split(",")
-            for subnet in subnet_list:
-                found_host_ips = NICS(self.logger, True).get_ips_in_subnet(subnet)
-                req_status = self.add_listeners(request.subsystem_nqn, found_host_ips,
-                                                request.secure_listeners)
+        # if network_mask_subnets:
+        # subnet_list = network_mask_subnets.split(",")
+        for subnet in network_mask_subnets:
+            found_host_ips = NICS(self.logger, True).get_ips_in_subnet(subnet)
+            req_status = self.add_listeners(request.subsystem_nqn, found_host_ips,
+                                            request.secure_listeners)
         if req_status != 0:
             err_msg = f"Failed to create auto-listeners for subsystem {request.subsystem_nqn}"
             return pb2.req_status(status=req_status, error_message=err_msg)
@@ -1994,6 +1994,10 @@ class GatewayService(pb2_grpc.GatewayServicer):
         assert self.rpc_lock.locked(), \
             "RPC is unlocked when calling add_subsystem_network_safe()"
 
+        self.logger.info(
+            f"Received request to add network to subsystem {request.subsystem_nqn}, "
+            f"network mask: {request.network_mask}, context: {context}")
+
         req_status = 0
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
@@ -2011,8 +2015,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
             assert subsys_entry, f"Can't find entry for subsystem {request.subsystem_nqn}"
             try:
                 network_to_add = request.network_mask
-                existing_network_mask_ = subsys_entry.network_mask.split(",")
-                existing_network_masks = set(net for net in existing_network_mask_ if net)
+                # existing_network_mask_ = subsys_entry.network_mask.split(",")
+                existing_network_masks = set(subsys_entry.network_mask)
                 if network_to_add in existing_network_masks:
                     errmsg = f"Network mask already exists for " \
                              f"subsystem {request.subsystem_nqn}"
@@ -2027,7 +2031,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                      'failed with non-zero status code.')
                 else:
                     existing_network_masks.add(network_to_add)
-                    new_network_mask = ",".join(existing_network_masks)
+                    new_network_mask = list(existing_network_masks)
                     self.subsys_network[request.subsystem_nqn] = new_network_mask
                     if context:
                         # remove listener from subsystem's OMAP
@@ -2059,6 +2063,10 @@ class GatewayService(pb2_grpc.GatewayServicer):
         assert self.rpc_lock.locked(), \
             "RPC is unlocked when calling del_subsystem_network_safe()"
 
+        self.logger.info(
+            f"Received request to delete network to subsystem {request.subsystem_nqn}, "
+            f"network mask: {request.network_mask}, context: {context}")
+
         req_status = 0
         omap_lock = self.omap_lock.get_omap_lock_to_use(context)
         with omap_lock:
@@ -2075,14 +2083,13 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
             assert subsys_entry, f"Can't find entry for subsystem {request.subsystem_nqn}"
             try:
-                # TODO: fix "del_network" from gw1 -> "subsystem list" from gw2
                 network_to_delete = request.network_mask
                 if not subsys_entry.network_mask:
                     errmsg = f"No existing network mask found for " \
                              f"subsystem {request.subsystem_nqn}"
                     return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
-                existing_network_mask_ = subsys_entry.network_mask.split(",")
-                existing_network_mask = set(net for net in existing_network_mask_ if net)
+                # existing_network_mask_ = subsys_entry.network_mask.split(",")
+                existing_network_mask = set(subsys_entry.network_mask)
                 if network_to_delete not in existing_network_mask:
                     errmsg = f"Network mask {request.network_mask} not " \
                              f"found for subsystem {request.subsystem_nqn}"
@@ -2096,12 +2103,10 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                      'failed with non-zero status code.')
                 else:
                     existing_network_mask.remove(network_to_delete)
-                    new_network_mask = ",".join(existing_network_mask)
+                    new_network_mask = list(existing_network_mask)
                     self.logger.info(f"VALLARI_DEBUG: 1 {existing_network_mask=}k")
                     self.logger.info(f"VALLARI_DEBUG: 2 {new_network_mask=}l")
                     self.subsys_network[request.subsystem_nqn] = new_network_mask
-                    self.logger.info("VALLARI_DEBUG: 3 "
-                                     f"{self.subsys_network[request.subsystem_nqn]}p")
                     if context:
                         # remove listener from subsystem's OMAP
                         subsys_entry.network_mask = new_network_mask
@@ -2109,7 +2114,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                             subsys_entry, preserving_proto_field_name=True,
                             including_default_value_fields=True)
                         self.gateway_state.add_subsystem(request.subsystem_nqn, json_req)
-                    self.logger.info(f"Removed network {network_to_delete} for subsystem"
+                    self.logger.info(f"Removed network {network_to_delete} for subsystem "
                                      f"{request.subsystem_nqn}")
             except Exception as ex:
                 errmsg = f"Failure occured:\n{ex}"

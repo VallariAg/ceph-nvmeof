@@ -1018,9 +1018,7 @@ class GatewayClient:
                     ctrls_id = f"{s.min_cntlid}-{s.max_cntlid}"
                     has_dhchap = "Yes" if s.has_dhchap_key else "No"
                     allow_any = "Yes" if s.allow_any_host else "No"
-                    net_mask = s.network_mask
-                    if net_mask:
-                        net_mask = net_mask.replace(',', '\n')
+                    net_mask = '\n'.join(s.network_mask) if s.network_mask else ""
                     one_subsys = [s.subtype,
                                   s.nqn,
                                   s.serial_number,
@@ -1216,6 +1214,7 @@ class GatewayClient:
                  required=False),
         argument("--network-mask",
                  help="For this subnet, automatically create listeners for this subsystem",
+                 action="append",
                  required=False),
         argument("--secure-listeners",
                  help="Make all the auto-listeners for this subsystem secure",
