@@ -1827,7 +1827,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 self.logger.debug(f"create_subsystem {request.subsystem_nqn}: {ret}")
                 self.subsys_max_ns[request.subsystem_nqn] = request.max_namespaces
                 self.subsys_serial[request.subsystem_nqn] = request.serial_number
-                self.subsys_network[request.subsystem_nqn] = request.network_mask
+                self.subsys_network[request.subsystem_nqn] = list(request.network_mask)
 
                 dhchap_key_for_omap = request.dhchap_key
                 key_encrypted_for_omap = False
@@ -6259,9 +6259,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     if not ns_count:
                         self.subsystem_nsid_bdev_and_uuid.remove_namespace(s["nqn"])
                     s["namespace_count"] = ns_count
-                    s["network_mask"] = ""
+                    s["network_mask"] = []
                     if s["nqn"] in self.subsys_network:
-                        s["network_mask"] = self.subsys_network[s['nqn']]
+                        s["network_mask"] = list(self.subsys_network[s['nqn']])
                     if request.subsystem_nqn:
                         self.logger.info(f"VALLARI_DEBUG 5: {s['nqn']}"
                                          f"{self.subsys_network[s['nqn']]}")
