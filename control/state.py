@@ -153,12 +153,18 @@ class GatewayState(ABC):
         return GatewayState.SUBSYSTEM_NETWORK_MASK + subsystem_nqn
 
     def build_subsystem_network_add_key(subsystem_nqn: str, network: str) -> str:
-        return GatewayState.SUBSYSTEM_NETWORK_ADD_PREFIX + GatewayState.OMAP_KEY_DELIMITER + \
-            subsystem_nqn + GatewayState.OMAP_KEY_DELIMITER + network
+        key = GatewayState.SUBSYSTEM_NETWORK_ADD_PREFIX + GatewayState.OMAP_KEY_DELIMITER + \
+            subsystem_nqn + GatewayState.OMAP_KEY_DELIMITER
+        if network is not None:
+            key += network
+        return key
 
     def build_subsystem_network_del_key(subsystem_nqn: str, network: str) -> str:
-        return GatewayState.SUBSYSTEM_NETWORK_DEL_PREFIX + GatewayState.OMAP_KEY_DELIMITER + \
-            subsystem_nqn + GatewayState.OMAP_KEY_DELIMITER + network
+        key = GatewayState.SUBSYSTEM_NETWORK_DEL_PREFIX + GatewayState.OMAP_KEY_DELIMITER + \
+            subsystem_nqn + GatewayState.OMAP_KEY_DELIMITER
+        if network is not None:
+            key += network
+        return key
 
     def build_partial_listener_key(subsystem_nqn: str, host: str) -> str:
         key = GatewayState.LISTENER_PREFIX + subsystem_nqn + GatewayState.OMAP_KEY_DELIMITER
@@ -278,9 +284,9 @@ class GatewayState(ABC):
                 self._remove_key(key)
             elif key.startswith(GatewayState.build_subsystem_key_key(subsystem_nqn)):
                 self._remove_key(key)
-            elif key.startswith(GatewayState.build_subsystem_network_add_key(subsystem_nqn)):
+            elif key.startswith(GatewayState.build_subsystem_network_add_key(subsystem_nqn, None)):
                 self._remove_key(key)
-            elif key.startswith(GatewayState.build_subsystem_network_del_key(subsystem_nqn)):
+            elif key.startswith(GatewayState.build_subsystem_network_del_key(subsystem_nqn, None)):
                 self._remove_key(key)
             elif key.startswith(GatewayState.build_partial_listener_key(subsystem_nqn, None)):
                 self._remove_key(key)

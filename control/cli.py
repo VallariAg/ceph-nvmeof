@@ -1214,7 +1214,7 @@ class GatewayClient:
                  required=False),
         argument("--network-mask",
                  help="For this subnet, automatically create listeners for this subsystem",
-                 action="append",
+                 nargs='+',
                  required=False),
         argument("--secure-listeners",
                  help="Make all the auto-listeners for this subsystem secure",
