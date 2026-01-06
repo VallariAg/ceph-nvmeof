@@ -47,7 +47,7 @@ service Gateway {
 	// Changes subsystem key
 	rpc change_subsystem_key(change_subsystem_key_req) returns(req_status) {}
 
-	// Changes a subsystem network
+	// Add a subsystem network
 	rpc add_subsystem_network(add_subsystem_network_req) returns(req_status) {}
 
 	// Delete a subsystem network
@@ -254,7 +254,7 @@ message create_subsystem_req {
 	optional bool no_group_append = 5;
 	optional string dhchap_key = 6;
 	optional bool key_encrypted = 7;
-	optional string network_mask = 8;
+	repeated string network_mask = 8;
 	optional bool secure_listeners = 9;
 }
 
@@ -445,6 +445,7 @@ message subsystem {
 	optional uint32 max_cntlid = 10;
 	repeated namespace namespaces = 11;
 	optional bool has_dhchap_key = 12;
+	repeated string network_mask = 13;
 }
 
 message listen_address {
@@ -487,7 +488,7 @@ message subsystem_cli {
 	optional bool has_dhchap_key = 10;
 	optional bool allow_any_host = 11;
 	optional bool created_without_key = 12;
-	optional string network_mask = 13;
+	repeated string network_mask = 13;
 }
 
 message gateway_info {

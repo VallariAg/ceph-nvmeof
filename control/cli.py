@@ -1018,6 +1018,7 @@ class GatewayClient:
                     ctrls_id = f"{s.min_cntlid}-{s.max_cntlid}"
                     has_dhchap = "Yes" if s.has_dhchap_key else "No"
                     allow_any = "Yes" if s.allow_any_host else "No"
+                    net_mask = '\n'.join(s.network_mask) if s.network_mask else ""
                     one_subsys = [s.subtype,
                                   s.nqn,
                                   s.serial_number,
@@ -1025,7 +1026,8 @@ class GatewayClient:
                                   s.namespace_count,
                                   s.max_namespaces,
                                   allow_any,
-                                  has_dhchap]
+                                  has_dhchap,
+                                  net_mask]
                     if created_without_key:
                         one_subsys.append("Yes" if s.created_without_key else "No")
                     subsys_list.append(one_subsys)
@@ -1036,7 +1038,7 @@ class GatewayClient:
                         table_format = "plain"
                     headers_list = ["Subtype", "NQN", "Serial\nNumber", "Controller IDs",
                                     "Namespace\nCount", "Max\nNamespaces", "Allow\nAny Host",
-                                    "DHCHAP\nKey"]
+                                    "DHCHAP\nKey", "Network\nMask"]
                     if created_without_key:
                         headers_list.append("Created\nWithout Key")
                     subsys_out = tabulate(subsys_list,
@@ -1154,7 +1156,7 @@ class GatewayClient:
         return ret.status
 
     def subsystem_del_network_mask(self, args):
-        """Change subsystem's network mask"""
+        """Delete subsystem's network mask"""
 
         out_func, err_func, _ = self.get_output_functions(args)
 
@@ -1212,6 +1214,7 @@ class GatewayClient:
                  required=False),
         argument("--network-mask",
                  help="For this subnet, automatically create listeners for this subsystem",
+                 nargs='+',
                  required=False),
         argument("--secure-listeners",
                  help="Make all the auto-listeners for this subsystem secure",
@@ -1294,7 +1297,7 @@ class GatewayClient:
                               "help": "Delete subsystem inband authentication key"})
     subsystem_actions.append({"name": "add_network",
                               "args": subsys_add_network_args,
-                              "help": "Change a network mask in the subsystem"})
+                              "help": "Add a network mask in the subsystem"})
     subsystem_actions.append({"name": "del_network",
                               "args": subsys_del_network_args,
                               "help": "Delete a network mask in the subsystem"})
