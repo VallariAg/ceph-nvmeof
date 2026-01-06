@@ -2035,7 +2035,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     self.subsys_network[request.subsystem_nqn] = new_network_mask
                     if context:
                         # remove listener from subsystem's OMAP
-                        subsys_entry.network_mask = new_network_mask
+                        # subsys_entry.network_mask.clear()
+                        subsys_entry.network_mask[:] = new_network_mask
+                        # subsys_entry.network_mask = new_network_mask
                         json_req = json_format.MessageToJson(
                             subsys_entry, preserving_proto_field_name=True,
                             including_default_value_fields=True)
@@ -2109,7 +2111,9 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     self.subsys_network[request.subsystem_nqn] = new_network_mask
                     if context:
                         # remove listener from subsystem's OMAP
-                        subsys_entry.network_mask = new_network_mask
+                        # subsys_entry.network_mask.clear()
+                        subsys_entry.network_mask[:] = new_network_mask
+                        # subsys_entry.network_mask = new_network_mask
                         json_req = json_format.MessageToJson(
                             subsys_entry, preserving_proto_field_name=True,
                             including_default_value_fields=True)

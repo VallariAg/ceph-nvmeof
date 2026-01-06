@@ -1524,12 +1524,13 @@ class GatewayStateHandler:
                                    f"and new values ({old_req})"
         # Because of Json formatting of empty fields we might get a difference here,
         # so just use the same values for empty
-        old_req.network_mask = GatewayStateHandler._normalize_json_string(old_req.network_mask)
-        new_req.network_mask = GatewayStateHandler._normalize_json_string(new_req.network_mask)
+        # old_req.network_mask = GatewayStateHandler._normalize_json_string(old_req.network_mask)
+        # new_req.network_mask = GatewayStateHandler._normalize_json_string(new_req.network_mask)
 
         add = list(set(new_req.network_mask) - set(old_req.network_mask))
         delete = list(set(old_req.network_mask) - set(new_req.network_mask))
-        old_req.network_mask = new_req.network_mask
+        old_req.network_mask[:] = list(new_req.network_mask)
+        # old_req.extend(list(new_req.network_mask))
         if old_req != new_req:
             # Something besides the network_mask is different
             return (False, None, None)
