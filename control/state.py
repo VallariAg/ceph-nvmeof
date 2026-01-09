@@ -1531,7 +1531,7 @@ class GatewayStateHandler:
 
         add = list(set(new_req.network_mask) - set(old_req.network_mask))
         delete = list(set(old_req.network_mask) - set(new_req.network_mask))
-        old_req.network_mask[:] = list(new_req.network_mask)
+        old_req.network_mask[:] = new_req.network_mask
         if old_req != new_req:
             # Something besides the network_mask is different
             return (False, None, None)
@@ -1762,10 +1762,10 @@ class GatewayStateHandler:
                             only_subsystem_key_changed.append((key,
                                                                new_dhchap_key,
                                                                new_key_encrypted))
-                        (should_process_n, add_n, del_n) = self.subsystem_only_network_mask_changed(
+                        (should_process, add_n, del_n) = self.subsystem_only_network_mask_changed(
                             local_state_dict[key],
                             omap_state_dict[key])
-                        if should_process_n:
+                        if should_process:
                             self.logger.debug(f"Found {key} where only the network has changed.")
                             only_subsystem_network_changed.append((key, add_n, del_n))
                 for key in added.keys():
@@ -1975,7 +1975,7 @@ class GatewayStateHandler:
                                     req,
                                     preserving_proto_field_name=True,
                                     including_default_value_fields=True)
-                                added[nadd_key] = json_req
+                                changed[nadd_key] = json_req
                             for network_subnet in delete_n:
                                 req = pb2.del_subsystem_network_req(subsystem_nqn=subsys_nqn,
                                                                     network_mask=network_subnet)
@@ -1985,7 +1985,7 @@ class GatewayStateHandler:
                                     req,
                                     preserving_proto_field_name=True,
                                     including_default_value_fields=True)
-                                added[ndel_key] = json_req
+                                changed[ndel_key] = json_req
                         except Exception:
                             self.logger.exception("Exception formatting add/del subsystem "
                                                   "network request")

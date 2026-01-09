@@ -73,13 +73,13 @@ class TestAutoListener:
         listeners = cli_test(["listener", "list", "--subsystem", subsystem])
         assert len(listeners.listeners) == 2
         assert listeners.listeners[0].trtype == "TCP"
-        assert listeners.listeners[0].traddr == addr
         assert listeners.listeners[0].trsvcid == 4420
         assert listeners.listeners[0].active
         assert not listeners.listeners[0].secure
         assert not listeners.listeners[0].manual
+        assert {listeners.listeners[0].traddr,
+                listeners.listeners[1].traddr} == {addr, addr_ipv6}
         assert listeners.listeners[1].trtype == "TCP"
-        assert listeners.listeners[1].traddr == addr_ipv6
         assert listeners.listeners[1].trsvcid == 4420
         assert listeners.listeners[1].active
         assert not listeners.listeners[1].secure

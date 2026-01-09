@@ -2015,17 +2015,17 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 network_to_add = request.network_mask
                 existing_network_masks = set(subsys_entry.network_mask)
                 if network_to_add in existing_network_masks:
-                    errmsg = f"Network mask already exists for " \
-                             f"subsystem {request.subsystem_nqn}"
-                    return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+                    self.logger.warning(f"Network mask already exists for "
+                                        f"subsystem {request.subsystem_nqn}")
+                    return pb2.req_status(status=0, error_message=os.strerror(0))
 
                 found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_add)
                 req_status = self.add_listeners(request.subsystem_nqn, found_ips,
                                                 subsys_entry.secure_listeners)
                 if req_status != 0:
-                    self.logger.info(f'Addition of network {request.network_mask} '
-                                     f'(IPs: {found_ips}) to subsystem {request.subsystem_nqn} '
-                                     'failed with non-zero status code.')
+                    self.logger.error(f'Addition of network {request.network_mask} '
+                                      f'(IPs: {found_ips}) to subsystem {request.subsystem_nqn} '
+                                      'failed.')
                 else:
                     existing_network_masks.add(network_to_add)
                     new_network_mask = list(existing_network_masks)
@@ -2084,19 +2084,19 @@ class GatewayService(pb2_grpc.GatewayServicer):
                 if not subsys_entry.network_mask:
                     errmsg = f"No existing network mask found for " \
                              f"subsystem {request.subsystem_nqn}"
-                    return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+                    return pb2.req_status(status=errno.ENONET, error_message=errmsg)
                 existing_network_mask = set(subsys_entry.network_mask)
                 if network_to_delete not in existing_network_mask:
-                    errmsg = f"Network mask {request.network_mask} not " \
-                             f"found for subsystem {request.subsystem_nqn}"
-                    return pb2.req_status(status=errno.ENODEV, error_message=errmsg)
+                    self.logger.warning(f"Network mask {request.network_mask} not "
+                                        f"found for subsystem {request.subsystem_nqn}")
+                    return pb2.req_status(status=0, error_message=os.strerror(0))
 
                 found_ips = NICS(self.logger, True).get_ips_in_subnet(network_to_delete)
                 req_status = self.del_listeners(request.subsystem_nqn, found_ips)
                 if req_status != 0:
-                    self.logger.info(f'Deletion of network {request.network_mask} '
-                                     f'(IPs: {found_ips}) to subsystem {request.subsystem_nqn} '
-                                     'failed with non-zero status code.')
+                    self.logger.error(f'Deletion of network {request.network_mask} '
+                                      f'(IPs: {found_ips}) to subsystem {request.subsystem_nqn} '
+                                      'failed.')
                 else:
                     existing_network_mask.remove(network_to_delete)
                     new_network_mask = list(existing_network_mask)
