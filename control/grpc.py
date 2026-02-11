@@ -3919,6 +3919,42 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                    subsystem_nqn=request.subsystem,
                                    namespaces=namespaces)
 
+    def list_namespaces_io_stats(self, request, context=None):
+        """Get all namespaces IO stats."""
+        failure_prefix = "Failure getting IO stats for all namespaces"
+        peer_msg = self.get_peer_message(context)
+        self.logger.info("Received request to get IO stats for all namespace, "
+                         f"context: {context}{peer_msg}")
+        with self.rpc_lock:
+            try:
+                ret = self.spdk_rpc_client.bdev_get_iostat()
+                self.logger.info(f"get_bdev_iostat: {ret}")
+            except Exception as ex:
+                self.logger.exception(failure_prefix)
+                errmsg = f"{failure_prefix}:\n{ex}"
+                resp = self.parse_json_exeption(ex)
+                status = errno.EINVAL
+                if resp:
+                    status = resp["code"]
+                    errmsg = f"{failure_prefix}: {resp['message']}"
+                return pb2.list_namespaces_io_stats_info(status=status, error_message=errmsg)
+
+        # Just in case SPDK failed with no exception
+        if not ret:
+            self.logger.error(failure_prefix)
+            return pb2.list_namespaces_io_stats_info(status=errno.EINVAL,
+                                                     error_message=failure_prefix)
+        bdevs_iostat = dict(ret)
+        bdevs_iostat.update({
+            "status": 0,
+            "error_message": os.strerror(0)
+        })
+        bdevs_iostat_json = json.dumps(bdevs_iostat)
+        bdevs_iostat_info = json_format.Parse(bdevs_iostat_json,
+                                              pb2.list_namespaces_io_stats_info(),
+                                              ignore_unknown_fields=True)
+        return bdevs_iostat_info
+
     def namespace_get_io_stats(self, request, context=None):
         """Get namespace's IO stats."""
 
