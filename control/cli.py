@@ -2964,6 +2964,97 @@ class GatewayClient:
 
         return ns_io_stats.status
 
+    def ns_list_io_stats(self, args):
+        """Get all namespaces IO statistics."""
+
+        out_func, err_func, _ = self.get_output_functions(args)
+
+        try:
+            ns_list_io_stats_req = pb2.list_namespaces_io_stats_req()
+            ns_all_io_stats = self.stub.list_namespaces_io_stats(ns_list_io_stats_req)
+        except Exception as ex:
+            ns_all_io_stats = pb2.list_namespaces_io_stats_info(
+                status=errno.EINVAL,
+                error_message=f"Failure getting all namespaces IO stats:\n{ex}")
+
+        if args.format == "text" or args.format == "plain":
+            if ns_all_io_stats.status == 0:
+                ns_iostat_list = []
+                for ns_iostat in ns_all_io_stats.bdevs:
+                    ns_iostat_list.append([
+                        ns_iostat.name,
+                        ns_iostat.bytes_read,
+                        ns_iostat.num_read_ops,
+                        ns_iostat.bytes_written,
+                        ns_iostat.num_write_ops,
+                        ns_iostat.bytes_unmapped,
+                        ns_iostat.num_unmap_ops,
+                        ns_iostat.bytes_copied,
+                        ns_iostat.num_copy_ops,
+                        ns_iostat.read_latency_ticks,
+                        ns_iostat.max_read_latency_ticks,
+                        ns_iostat.min_read_latency_ticks,
+                        ns_iostat.write_latency_ticks,
+                        ns_iostat.max_write_latency_ticks,
+                        ns_iostat.min_write_latency_ticks,
+                        ns_iostat.unmap_latency_ticks,
+                        ns_iostat.max_unmap_latency_ticks,
+                        ns_iostat.min_unmap_latency_ticks,
+                        ns_iostat.copy_latency_ticks,
+                        ns_iostat.max_copy_latency_ticks,
+                        ns_iostat.min_copy_latency_ticks,
+                    ])
+                if len(ns_iostat_list) > 0:
+                    table_format = "fancy_grid" if args.format == "text" else "plain"
+                    ns_iostat_out = tabulate(ns_iostat_list,
+                                             headers=[
+                                                 "Name",
+                                                 "Bytes Read",
+                                                 "Num Read Ops",
+                                                 "Bytes Written",
+                                                 "Num Write Ops",
+                                                 "Bytes Unmapped",
+                                                 "Num Unmap Ops",
+                                                 "Bytes Copied",
+                                                 "Num Copy Ops",
+                                                 "Read Latency Ticks",
+                                                 "Max Read Latency Ticks",
+                                                 "Min Read Latency Ticks",
+                                                 "Write Latency Ticks",
+                                                 "Max Write Latency Ticks",
+                                                 "Min Write Latency Ticks",
+                                                 "Unmap Latency Ticks",
+                                                 "Max Unmap Latency Ticks",
+                                                 "Min Unmap Latency Ticks",
+                                                 "Copy Latency Ticks",
+                                                 "Max Copy Latency Ticks",
+                                                 "Min Copy Latency Ticks",
+                                             ],
+                                             tablefmt=table_format)
+                    tick_rate = ns_all_io_stats.tick_rate
+                    tick = ns_all_io_stats.tick
+                    out_func(f"Namespace iostat with tick rate={tick_rate} and "
+                             f"tick={tick}:\n{ns_iostat_out}")
+                else:
+                    out_func("No namespaces found")
+            else:
+                err_func(f"{ns_all_io_stats.error_message}")
+        elif args.format == "json" or args.format == "yaml":
+            ret_str = json_format.MessageToJson(ns_all_io_stats, indent=4,
+                                                including_default_value_fields=True,
+                                                preserving_proto_field_name=True)
+            if args.format == "json":
+                out_func(ret_str)
+            elif args.format == "yaml":
+                obj = json.loads(ret_str)
+                out_func(yaml.dump(obj))
+        elif args.format == "python":
+            return ns_all_io_stats
+        else:
+            assert False
+
+        return ns_all_io_stats.status
+
     def ns_change_load_balancing_group(self, args):
         """Change namespace load balancing group."""
 
@@ -3640,6 +3731,9 @@ class GatewayClient:
     ns_actions.append({"name": "get_io_stats",
                        "args": ns_get_io_stats_args_list,
                        "help": "Get I/O stats for a namespace"})
+    ns_actions.append({"name": "list_io_stats",
+                       "args": [],
+                       "help": "Get I/O stats for all namespace"})
     ns_actions.append({"name": "change_load_balancing_group",
                        "args": ns_change_load_balancing_group_args_list,
                        "help": "Change load balancing group for a namespace"})
@@ -3685,6 +3779,8 @@ class GatewayClient:
             return self.ns_list(args, False)
         elif args.action == "get_io_stats":
             return self.ns_get_io_stats(args)
+        elif args.action == "list_io_stats":
+            return self.ns_list_io_stats(args)
         elif args.action == "change_load_balancing_group":
             return self.ns_change_load_balancing_group(args)
         elif args.action == "set_qos":
