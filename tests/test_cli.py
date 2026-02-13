@@ -1529,19 +1529,23 @@ class TestCreate:
                "subsystem \"junk\"" in caplog.text
         caplog.clear()
         cli(["namespace", "get_io_stats", "--subsystem", subsystem, "--nsid", "6"])
-        assert f'IO statistics for namespace 6 in {subsystem}' in caplog.text
+        assert f'IO statistics for namespace 6 in {subsystem}; ' in caplog.text
         caplog.clear()
         cli(["--format", "json", "namespace", "get_io_stats",
              "--subsystem", subsystem, "--nsid", "6"])
         assert '"status": 0' in caplog.text
-        assert f'"subsystem_nqn": "{subsystem}"' in caplog.text
-        assert '"nsid": 6,' in caplog.text
-        assert f'"uuid": "{uuid2}"' in caplog.text
         assert '"ticks":' in caplog.text
         assert '"bytes_written":' in caplog.text
         assert '"bytes_read":' in caplog.text
         assert '"max_write_latency_ticks":' in caplog.text
         assert '"io_error":' in caplog.text
+        caplog.clear()
+        cli(["--format", "json", "namespace", "get_io_stats", "--subsystem", subsystem])
+        assert "Failure getting IO stats for namespace, missing ID" in caplog.text
+        caplog.clear()
+        cli(["--format", "json", "namespace", "get_io_stats", "--nsid", "6"])
+        assert "Failure getting IO stats for namespace 6, " \
+               "missing subsystem NQN" in caplog.text
         caplog.clear()
         rc = 0
         try:
@@ -1552,15 +1556,19 @@ class TestCreate:
             pass
         assert "error: unrecognized arguments: --uuid" in caplog.text
         assert rc == 2
+
+    def test_namespace_io_stats_all(self, caplog, gateway):
         caplog.clear()
-        rc = 0
-        try:
-            cli(["--format", "json", "namespace", "get_io_stats", "--subsystem", subsystem])
-        except SystemExit as sysex:
-            rc = int(str(sysex))
-            pass
-        assert "error: the following arguments are required: --nsid" in caplog.text
-        assert rc == 2
+        cli(["namespace", "get_io_stats"])
+        assert 'IO statistics for all namespaces; ' in caplog.text
+        caplog.clear()
+        cli(["--format", "json", "namespace", "get_io_stats"])
+        assert '"status": 0' in caplog.text
+        assert '"ticks":' in caplog.text
+        assert caplog.text.count('"max_write_latency_ticks":') == 12
+        assert caplog.text.count('"bytes_written":') == 12
+        assert caplog.text.count('"bytes_read":') == 12
+        assert caplog.text.count('"io_error":') == 12
 
     def test_host_missing_nqn(self, caplog):
         caplog.clear()

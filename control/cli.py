@@ -2872,18 +2872,6 @@ class GatewayClient:
                 status=errno.EINVAL,
                 error_message=f"Failure getting namespaces IO stats:\n{ex}")
 
-        if ns_io_stats.status == 0:
-            if ns_io_stats.subsystem_nqn != args.subsystem:
-                ns_io_stats.status = errno.ENODEV
-                ns_io_stats.error_message = f"Failure getting namespace's IO stats: Returned " \
-                                            f"subsystem {ns_io_stats.subsystem_nqn} differs " \
-                                            f"from requested one {args.subsystem}"
-            elif args.nsid and args.nsid != ns_io_stats.nsid:
-                ns_io_stats.status = errno.ENODEV
-                ns_io_stats.error_message = f"Failure getting namespace's IO stats: Returned " \
-                                            f"namespace NSID {ns_io_stats.nsid} differs from " \
-                                            f"requested one {args.nsid}"
-
         if args.format == "text" or args.format == "plain":
             if ns_io_stats.status == 0:
                 ns_iostat_list = []
@@ -2939,9 +2927,12 @@ class GatewayClient:
                                              ],
                                              tablefmt=table_format)
                     tick_rate = ns_io_stats.tick_rate
-                    tick = ns_io_stats.tick
-                    out_func(f"Namespace iostat with tick rate={tick_rate} and "
-                             f"tick={tick}:\n{ns_iostat_out}")
+                    ticks = ns_io_stats.ticks
+                    if args.nsid and args.subsystem:
+                        ns_str = f"IO statistics for namespace {args.nsid} in {args.subsystem}"
+                    else:
+                        ns_str = "IO statistics for all namespaces"
+                    out_func(f"{ns_str}; tick rate={tick_rate} and ticks={ticks}:\n{ns_iostat_out}")
                 else:
                     out_func("No namespaces found")
             else:

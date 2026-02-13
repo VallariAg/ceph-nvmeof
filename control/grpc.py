@@ -3933,8 +3933,8 @@ class GatewayService(pb2_grpc.GatewayServicer):
             return pb2.list_namespaces_io_stats_info(status=errno.EINVAL, error_message=errmsg)
 
         if (request.nsid and not request.subsystem_nqn):
-            errmsg = f"Failure getting IO stats for namespace {request.nsid}, \
-                missing subsystem NQN"
+            errmsg = f"Failure getting IO stats for namespace {request.nsid}, " \
+                     "missing subsystem NQN"
             self.logger.error(errmsg)
             return pb2.list_namespaces_io_stats_info(status=errno.EINVAL, error_message=errmsg)
 
