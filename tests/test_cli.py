@@ -1570,6 +1570,33 @@ class TestCreate:
         assert caplog.text.count('"bytes_read":') == 12
         assert caplog.text.count('"io_error":') == 12
 
+    def test_namespace_get_io_stats(self, caplog, gateway):
+        gw, stub = gateway
+        ns_iostat_req = pb2.namespace_get_io_stats_req(
+            subsystem_nqn=subsystem)
+        caplog.clear()
+        ret = stub.namespace_get_io_stats(ns_iostat_req)
+        assert ret.status != 0
+        assert "Failure getting IO stats for namespace, missing ID" in ret.error_message
+        ns_iostat_req = pb2.namespace_get_io_stats_req(
+            nsid=6)
+        caplog.clear()
+        ret = stub.namespace_get_io_stats(ns_iostat_req)
+        assert ret.status != 0
+        assert "Failure getting IO stats for namespace 6, " \
+               "missing subsystem NQN" in ret.error_message
+        ns_iostat_req = pb2.namespace_get_io_stats_req(
+            subsystem_nqn=subsystem,
+            nsid=6)
+        caplog.clear()
+        ret = stub.namespace_get_io_stats(ns_iostat_req)
+        assert ret.status == 0
+        assert ret.nsid == 6
+        assert ret.subsystem_nqn == subsystem
+        assert hasattr(ret, 'tick_rate')
+        assert hasattr(ret, 'ticks')
+        assert hasattr(ret, 'num_write_ops')
+
     def test_host_missing_nqn(self, caplog):
         caplog.clear()
         rc = 0
