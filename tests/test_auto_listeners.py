@@ -178,7 +178,7 @@ class TestAutoListener:
         assert not listeners.listeners[1].secure
         assert not listeners.listeners[1].manual
 
-    def test_delete_non_existing_listener(self, caplog, gateway):
+    def test_fail_delete_auto_listener(self, caplog, gateway):
         caplog.clear()
         cli(["listener", "del", "--subsystem", subsystem, "--host-name", host_name,
              "--traddr", addr, "--trsvcid", "4420"])
