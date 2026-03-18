@@ -127,6 +127,15 @@ class TestAutoListener:
         assert ret.status != 0
         assert f"Failure deleting network_mask for subsystem {subsystem}: " \
                "Missing network_mask" in caplog.text
+
+        caplog.clear()
+        invalid_subnet = "not-a-subnet"
+        invalid_netmask_param = pb2.del_subsystem_network_req(subsystem_nqn=subsystem,
+                                                              network_mask=invalid_subnet)
+        ret = stub.del_subsystem_network(invalid_netmask_param)
+        assert ret.status != 0
+        assert f"Failure deleting network_mask for subsystem {subsystem}: " \
+               f"Invalid subnet \"{invalid_subnet}\"" in caplog.text
         caplog.clear()
 
     def test_del_network_mask(self, caplog, gateway):
@@ -172,6 +181,15 @@ class TestAutoListener:
         assert ret.status != 0
         assert f"Failure adding network_mask for subsystem {subsystem}: " \
                "Missing network_mask" in caplog.text
+
+        caplog.clear()
+        invalid_subnet = "not-a-subnet"
+        invalid_netmask_param = pb2.add_subsystem_network_req(subsystem_nqn=subsystem,
+                                                              network_mask=invalid_subnet)
+        ret = stub.add_subsystem_network(invalid_netmask_param)
+        assert ret.status != 0
+        assert f"Failure adding network_mask for subsystem {subsystem}: " \
+               f"Invalid subnet \"{invalid_subnet}\"" in caplog.text
         caplog.clear()
 
     def test_add_network_mask(self, caplog, gateway):
