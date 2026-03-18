@@ -1831,6 +1831,14 @@ class GatewayService(pb2_grpc.GatewayServicer):
                                      error_message=errmsg,
                                      nqn=request.subsystem_nqn)
 
+        if request.network_mask:
+            for netmask in list(request.network_mask):
+                if not NICS.is_valid_subnet(netmask):
+                    errmsg = f"{create_subsystem_error_prefix}: Invalid subnet for " \
+                             f"network_mask \"{netmask}\""
+                    self.logger.error(errmsg)
+                    return pb2.req_status(status=errno.EINVAL, error_message=errmsg)
+
         errmsg = ""
         if not GatewayState.is_key_element_valid(request.subsystem_nqn):
             errmsg = f"{create_subsystem_error_prefix}: Invalid NQN " \

@@ -113,6 +113,29 @@ class TestAutoListener:
         assert listeners.listeners[0].secure
         assert not listeners.listeners[0].manual
 
+    def test_create_subsystem_invalid_network_mask(self, caplog, gateway):
+        _, stub = gateway
+        caplog.clear()
+        serial = "Ceph00000000000001"
+        invalid_subnet = "nosubnet"
+        req = pb2.create_subsystem_req(subsystem_nqn=subsystem, max_namespaces=256,
+                                       serial_number=serial, enable_ha=True,
+                                       network_mask=[invalid_subnet])
+        ret = stub.create_subsystem(req)
+        assert ret.status != 0
+        assert f"Failure creating subsystem {subsystem}: Invalid subnet for " \
+               f"network_mask \"{invalid_subnet}\"" in caplog.text
+
+        caplog.clear()
+        req = pb2.create_subsystem_req(subsystem_nqn=subsystem, max_namespaces=256,
+                                       serial_number=serial, enable_ha=True,
+                                       network_mask=[addr_subnet, invalid_subnet])
+        ret = stub.create_subsystem(req)
+        assert ret.status != 0
+        assert f"Failure creating subsystem {subsystem}: Invalid subnet for " \
+               f"network_mask \"{invalid_subnet}\"" in caplog.text
+        caplog.clear()
+
     def test_del_network_mask_param_fail(self, caplog, gateway):
         _, stub = gateway
         caplog.clear()
@@ -129,7 +152,7 @@ class TestAutoListener:
                "Missing network_mask" in caplog.text
 
         caplog.clear()
-        invalid_subnet = "not-a-subnet"
+        invalid_subnet = "nosubnet"
         invalid_netmask_param = pb2.del_subsystem_network_req(subsystem_nqn=subsystem,
                                                               network_mask=invalid_subnet)
         ret = stub.del_subsystem_network(invalid_netmask_param)
@@ -183,7 +206,7 @@ class TestAutoListener:
                "Missing network_mask" in caplog.text
 
         caplog.clear()
-        invalid_subnet = "not-a-subnet"
+        invalid_subnet = "nosubnet"
         invalid_netmask_param = pb2.add_subsystem_network_req(subsystem_nqn=subsystem,
                                                               network_mask=invalid_subnet)
         ret = stub.add_subsystem_network(invalid_netmask_param)
