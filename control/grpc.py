@@ -7208,7 +7208,7 @@ class GatewayService(pb2_grpc.GatewayServicer):
                     state = self.gateway_state.local.get_state()
                     listener_prefix = GatewayState.build_partial_listener_key(
                         request.nqn, None)
-                    is_in_omap = False
+                    lstnr_in_omap = None
                     for key, val in state.items():
                         if not key.startswith(listener_prefix):
                             continue
@@ -7216,12 +7216,18 @@ class GatewayService(pb2_grpc.GatewayServicer):
                             lstnr = json_format.Parse(val, pb2.create_listener_req(),
                                                       ignore_unknown_fields=True)
                             if lstnr.traddr == traddr and lstnr.trsvcid == request.trsvcid:
-                                is_in_omap = True
+                                lstnr_in_omap = lstnr
                                 break
                         except Exception:
                             self.logger.exception(f"Got exception while parsing {val}")
                             continue
-                    if not is_in_omap:
+                    if lstnr_in_omap and is_in_local_list:
+                        if not (request.host_name == "*" or lstnr_in_omap.host_name == request.host_name):
+                            errmsg = f"{delete_listener_error_prefix}: Incorrect hostname, " \
+                                     f"found listener at same address with hostname {lstnr_in_omap.host_name}"
+                            self.logger.error(errmsg)
+                            return pb2.req_status(status=errno.ENOENT, error_message=errmsg)
+                    if not lstnr_in_omap:
                         if is_in_local_list:
                             errmsg = f"{delete_listener_error_prefix}: Listener was created " \
                                      f"automatically as part of the subsystem's network mask. " \
