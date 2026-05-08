@@ -852,8 +852,8 @@ jobs:
         run: |
           . .env
           for image in nvmeof nvmeof-cli; do
-            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION quay.io/vallari/$image:auto-listener-ip-overlap-debug-2
-            docker push quay.io/vallari/$image:auto-listener-ip-overlap-debug-2
+            docker tag $CONTAINER_REGISTRY/$image:$NVMEOF_VERSION quay.io/vallari/$image:auto-listener-ip-overlap-debug-4
+            docker push quay.io/vallari/$image:auto-listener-ip-overlap-debug-4
           done
 
   # pull-and-run-images:

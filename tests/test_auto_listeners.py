@@ -75,7 +75,6 @@ class TestAutoListener:
                         '--network-mask', addr_subnet, addr_ipv6_subnet])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Adding subsystem {subsystem}: Successful" in caplog.text
         assert "ipv4" in caplog.text.lower()
         assert f"Automatically created listener at {addr}:4420 for {subsystem}" in caplog.text
         assert "ipv6" in caplog.text.lower()
@@ -114,7 +113,6 @@ class TestAutoListener:
                         '--network-mask', addr_subnet, '--secure-listeners'])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Adding subsystem {subsystem2}: Successful" in caplog.text
         assert "ipv4" in caplog.text.lower()
         assert f"Automatically created listener at {addr}:4421 for {subsystem2}" in caplog.text
 
@@ -198,8 +196,7 @@ class TestAutoListener:
                         '--network-mask', addr_subnet])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Network mask {addr_subnet} deleted for subsystem {subsystem}: " \
-               f"Successful" in caplog.text
+        assert f"Deleted network {addr_subnet} for subsystem {subsystem}" in caplog.text
         assert f"Automatically deleted listener at {addr}:4420 for {subsystem}" in caplog.text
         assert f"Automatically created listener at {addr}:4420 for {subsystem}" not in caplog.text
 
@@ -309,7 +306,6 @@ class TestAutoListener:
                         '--network-mask', addr_subnet, addr_ipv6_subnet, "--port", "4500"])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Adding subsystem {subsystem3}: Successful" in caplog.text
         assert "ipv4" in caplog.text.lower()
         assert f"Automatically created listener at {addr}:4500 for {subsystem3}" in caplog.text
         assert "ipv6" in caplog.text.lower()
@@ -339,7 +335,6 @@ class TestAutoListener:
                         '--network-mask', addr_subnet, '--secure-listeners', "--port", "4501"])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Adding subsystem {subsystem4}: Successful" in caplog.text
         assert "ipv4" in caplog.text.lower()
         assert f"Automatically created listener at {addr}:4501 for {subsystem4}" in caplog.text
         cli(["subsystem", "list"])
@@ -359,8 +354,7 @@ class TestAutoListener:
                         '--network-mask', addr_subnet])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Network mask {addr_subnet} deleted for subsystem {subsystem3}: " \
-               f"Successful" in caplog.text
+        assert f"Deleted network {addr_subnet} for subsystem {subsystem3}" in caplog.text
         cli(["subsystem", "list"])
         assert wait_for_listener_count(subsystem3, 1)
         listeners = cli_test(["listener", "list", "--subsystem", subsystem3])
@@ -407,7 +401,6 @@ class TestAutoListener:
                         '--network-mask', larger_subnet, smaller_subnet])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Adding subsystem {subsystem5}: Successful" in caplog.text
 
         subsystems = cli_test(["subsystem", "list", "--subsystem", subsystem5])
         masks = subsystems.subsystems[0].network_mask
@@ -422,8 +415,7 @@ class TestAutoListener:
                         '--network-mask', smaller_subnet])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Network mask {smaller_subnet} deleted for subsystem " \
-               f"{subsystem5}: Successful" in caplog.text
+        assert f"Deleted network {smaller_subnet} for subsystem {subsystem5}" in caplog.text
         assert f"Keeping 1 auto-listener(s) for {subsystem5}" in caplog.text
 
         subsystems = cli_test(["subsystem", "list", "--subsystem", subsystem5])
@@ -440,8 +432,7 @@ class TestAutoListener:
                         '--network-mask', larger_subnet])
         assert ret.status == 0
         assert ret.error_message == ""
-        assert f"Network mask {larger_subnet} deleted for subsystem " \
-               f"{subsystem5}: Successful" in caplog.text
+        assert f"Deleted network {larger_subnet} for subsystem {subsystem5}" in caplog.text
 
         subsystems = cli_test(["subsystem", "list", "--subsystem", subsystem5])
         masks = subsystems.subsystems[0].network_mask
