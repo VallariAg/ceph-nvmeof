@@ -451,3 +451,39 @@ class TestAutoListener:
         expected_warn = f"No existing network mask found for subsystem {subsystem5}"
         assert expected_warn in ret.error_message
         assert expected_warn in caplog.text
+
+    def test_refresh_network_idempotent(self, caplog, gateway):
+        caplog.clear()
+        ret = cli_test(["gw", "refresh_network", "--subsystem", subsystem])
+        assert ret.status == 0
+        assert ret.error_message == ""
+        assert "Automatically created listener" not in caplog.text
+        assert "Automatically deleted listener" not in caplog.text
+
+    def test_refresh_network_removes_stale(self, caplog, gateway):
+        gw, stub = gateway
+        fake_ip = "192.168.99.99"
+        gw.subsystem_auto_listeners[subsystem].add(("ipv4", fake_ip, 4420))
+        caplog.clear()
+        req = pb2.gw_refresh_network_req(subsystem_nqn=subsystem)
+        ret = stub.gw_refresh_network(req)
+        assert ret.status == 0
+        assert ("ipv4", fake_ip, 4420) not in gw.subsystem_auto_listeners[subsystem]
+        assert f"Automatically deleted listener at {fake_ip}:4420 for {subsystem}" in caplog.text
+
+    def test_refresh_network_invalid_subsystem(self, caplog, gateway):
+        _, stub = gateway
+        caplog.clear()
+        req = pb2.gw_refresh_network_req(subsystem_nqn="nqn.invalid")
+        ret = stub.gw_refresh_network(req)
+        assert ret.status != 0
+        assert "Failure refreshing network: subsystem nqn.invalid not found" in ret.error_message
+
+    def test_refresh_network_no_masks(self, caplog, gateway):
+        _, stub = gateway
+        caplog.clear()
+        req = pb2.gw_refresh_network_req(subsystem_nqn=subsystem5)
+        ret = stub.gw_refresh_network(req)
+        assert ret.status != 0
+        assert (f"Failure refreshing network: subsystem {subsystem5} has no network masks"
+                f" configured") in ret.error_message
