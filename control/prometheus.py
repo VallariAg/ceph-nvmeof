@@ -363,6 +363,7 @@ class NVMeOFCollector:
                 logger.debug(f"no rbd information present for bdev {bdev.get('name')}, skipping")
                 continue
 
+            logger.info(f"VALLARI_DEBUG: {rbd_info}")
             rbd_pool = rbd_info.get('pool_name')
             rbd_namespace = rbd_info.get('namespace', '')  # namespace is not currently present
             rbd_image = rbd_info.get('rbd_name')
@@ -511,7 +512,8 @@ class NVMeOFCollector:
                     nqn,
                     str(ns.nsid),
                     ns.bdev_name,
-                    str(ns.anagrpid)
+                    str(ns.anagrpid),
+                    # str(ns.rados_namespace_name),
                 ], 1)
 
             conn_list = []
