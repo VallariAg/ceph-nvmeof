@@ -1,6 +1,7 @@
 import pytest
 from control.server import GatewayServer
 import socket
+import control.utils as utils
 from control.cli import main as cli
 from control.cli import main_test as cli_test
 from control.cephutils import CephUtils
@@ -100,6 +101,77 @@ class TestAutoListener:
         assert listeners.listeners[1].active
         assert not listeners.listeners[1].secure
         assert not listeners.listeners[1].manual
+
+    def test_auto_listener_hostname_from_service_dump(self, caplog, gateway):
+        gateway_rpc, _ = gateway
+        service_dump_hostname = "cluster-node1"
+        dns_hostname = "node1"
+
+        def mock_get_gw_hostnames():
+            return {host_name: service_dump_hostname}
+
+        def mock_gethostbyaddr(ip_addr):
+            return (dns_hostname, [], [ip_addr])
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(gateway_rpc.ceph_utils, "get_gw_hostnames", mock_get_gw_hostnames)
+            mp.setattr(utils.socket, "gethostbyaddr", mock_gethostbyaddr)
+            caplog.clear()
+            listeners = cli_test(["listener", "list", "--subsystem", subsystem])
+
+            assert listeners.status == 0
+            assert len(listeners.listeners) == 2
+            for listener in listeners.listeners:
+                assert not listener.manual
+                assert listener.host_name == service_dump_hostname
+
+    def test_auto_listener_hostname_from_address(self, caplog, gateway):
+        gateway_rpc, _ = gateway
+        dns_hostname = "node1"
+
+        def mock_get_gw_hostnames():
+            return {}
+
+        def mock_gethostbyaddr(ip_addr):
+            return (dns_hostname, [], [ip_addr])
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(gateway_rpc.ceph_utils, "get_gw_hostnames", mock_get_gw_hostnames)
+            mp.setattr(utils.socket, "gethostbyaddr", mock_gethostbyaddr)
+            caplog.clear()
+            listeners = cli_test(["listener", "list", "--subsystem", subsystem])
+
+            assert listeners.status == 0
+            assert len(listeners.listeners) == 2
+            for listener in listeners.listeners:
+                assert not listener.manual
+                assert listener.host_name == dns_hostname
+
+    def test_auto_listener_hostname_ip_fallback(self, caplog, gateway):
+        gateway_rpc, _ = gateway
+
+        def mock_get_gw_hostnames():
+            return {}
+
+        def raise_gethostbyaddr(ip_addr):
+            raise OSError("Unknown host")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(gateway_rpc.ceph_utils, "get_gw_hostnames", mock_get_gw_hostnames)
+            mp.setattr(utils.socket, "gethostbyaddr", raise_gethostbyaddr)
+            caplog.clear()
+            listeners = cli_test(["listener", "list", "--subsystem", subsystem])
+
+            assert listeners.status == 0
+            assert len(listeners.listeners) == 2
+            for listener in listeners.listeners:
+                assert not listener.manual
+                assert listener.traddr in (addr, addr_ipv6)
+                assert listener.host_name == listener.traddr
+                assert listener.host_name != host_name
+
+            for a in (addr, addr_ipv6):
+                assert (f"Failed to resolve hostname for IP {a}: Unknown host") in caplog.text
 
     def test_subsystem_list(self, caplog, gateway):
         subsystems = cli_test(["subsystem", "list", "--subsystem", subsystem])
