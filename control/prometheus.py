@@ -166,6 +166,7 @@ class NVMeOFCollector:
         self.spdk_thread_stats = {}
         self.subsystems = []
         self.connections = {}
+        self.connection_io_stats = {}
         self.method_timings = {}
 
         # Cache for connection map
@@ -254,6 +255,24 @@ class NVMeOFCollector:
             connection_map[subsys.nqn] = resp
         return connection_map
 
+    @timer
+    def _get_connection_io_stats(self):
+        """Fetch per-connection IO statistics for each currently connected host"""
+        io_stats = {}
+        for nqn, conn_info in self.connections.items():
+            for conn in conn_info.connections:
+                if not conn.connected or conn.nqn == "*":
+                    continue
+                resp = self.gateway_rpc.get_connection_io_statistics(
+                    pb2.get_connection_io_statistics_req(
+                        subsystem_nqn=nqn, host_nqn=conn.nqn, reset=False))
+                if resp.status != 0:
+                    logger.debug(f"Exporter failed to fetch IO stats for {conn.nqn} "
+                                 f"on {nqn}: {resp.error_message}")
+                    continue
+                io_stats[(nqn, conn.nqn)] = resp
+        return io_stats
+
     def _get_data(self):
         """Gather data from the SPDK"""
         self.bdev_info = self._get_bdev_info()
@@ -266,6 +285,8 @@ class NVMeOFCollector:
         logger.debug("Done with _get_subsystems()")
         self.connections = self._get_connection_map(self.subsystems)
         logger.debug("Done with _get_connection_map()")
+        self.connection_io_stats = self._get_connection_io_stats()
+        logger.debug("Done with _get_connection_io_stats()")
 
     def _log_timings(self):
         """Log timing for each method"""
@@ -275,6 +296,7 @@ class NVMeOFCollector:
         logger.debug(f"_get_spdk_thread_stats(): {t.get('_get_spdk_thread_stats', 0):.2f}s")
         logger.debug(f"_get_subsystems(): {t.get('_get_subsystems', 0):.2f}s")
         logger.debug(f"_get_connection_map(): {t.get('_get_connection_map', 0):.2f}s")
+        logger.debug(f"_get_connection_io_stats(): {t.get('_get_connection_io_stats', 0):.2f}s")
 
     @ttl
     def collect(self):
@@ -484,6 +506,26 @@ class NVMeOFCollector:
             f"{self.metric_prefix}_host_keepalive_timeout",
             "Host keepalive timeout 0=no, 1=yes",
             labels=["gw_name", "nqn", "host_nqn"])
+        connection_io_count = CounterMetricFamily(
+            f"{self.metric_prefix}_connection_io_count_total",
+            "Total number of IO operations for the connection, by IO size bucket",
+            labels=["nqn", "host_nqn", "size", "io_type"])
+        connection_bdev_latency_microseconds = GaugeMetricFamily(
+            f"{self.metric_prefix}_connection_bdev_latency_microseconds",
+            "Backend device IO latency for the connection, by IO size bucket",
+            labels=["nqn", "host_nqn", "size", "io_type", "stat"])
+        connection_net_latency_microseconds = GaugeMetricFamily(
+            f"{self.metric_prefix}_connection_net_latency_microseconds",
+            "Network IO latency for the connection, by IO size bucket",
+            labels=["nqn", "host_nqn", "size", "io_type", "stat"])
+        connection_qos_latency_microseconds = GaugeMetricFamily(
+            f"{self.metric_prefix}_connection_qos_latency_microseconds",
+            "QoS throttling latency for the connection, by IO size bucket",
+            labels=["nqn", "host_nqn", "size", "io_type", "stat"])
+        connection_total_latency_microseconds = GaugeMetricFamily(
+            f"{self.metric_prefix}_connection_total_latency_microseconds",
+            "End-to-end IO latency for the connection, by IO size bucket",
+            labels=["nqn", "host_nqn", "size", "io_type", "stat"])
 
         listener_map = {}
 
@@ -533,6 +575,25 @@ class NVMeOFCollector:
                     conn.nqn
                 ], 1 if conn.disconnected_due_to_keepalive_timeout else 0)
 
+                conn_io_stats = self.connection_io_stats.get((nqn, conn.nqn))
+                if conn_io_stats:
+                    for bucket in conn_io_stats.buckets:
+                        size = f"{bucket.size}KB"
+                        for io_type, lat_group in (("read", bucket.read), ("write", bucket.write)):
+                            if not lat_group.io_count:
+                                continue
+                            connection_io_count.add_metric(
+                                [nqn, conn.nqn, size, io_type], lat_group.io_count)
+                            for metric_family, lat_stats in (
+                                    (connection_bdev_latency_microseconds, lat_group.bdev),
+                                    (connection_net_latency_microseconds, lat_group.net),
+                                    (connection_qos_latency_microseconds, lat_group.qos),
+                                    (connection_total_latency_microseconds, lat_group.total)):
+                                for stat in ("min", "max", "mean"):
+                                    metric_family.add_metric(
+                                        [nqn, conn.nqn, size, io_type, stat],
+                                        getattr(lat_stats, stat))
+
         yield subsystem_metadata
         yield subsystem_listeners
         yield subsystem_host_count
@@ -541,6 +602,11 @@ class NVMeOFCollector:
         yield subsystem_namespace_metadata
         yield host_connection_state
         yield host_keep_alive_timeout
+        yield connection_io_count
+        yield connection_bdev_latency_microseconds
+        yield connection_net_latency_microseconds
+        yield connection_qos_latency_microseconds
+        yield connection_total_latency_microseconds
 
         subsystem_listener_iface_info = GaugeMetricFamily(
             f"{self.metric_prefix}_subsystem_listener_iface_info",
