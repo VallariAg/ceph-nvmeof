@@ -1346,6 +1346,12 @@ class GatewayServer:
                                             ignore_unknown_fields=True)
                     rc = self.gateway_rpc.change_subsystem_key(req)
                     abort_server_on_update_error(rc.status, rc.error_message)
+            elif key.startswith(GatewayState.SUBSYSTEM_DEFAULT_NETWORK_MASK_PREFIX):
+                if is_add_req:
+                    req = json_format.Parse(val, pb2.subsystem_set_use_default_network_mask_req(),
+                                            ignore_unknown_fields=True)
+                    rc = self.gateway_rpc.subsystem_set_use_default_gw_group_network_mask(req)
+                    abort_server_on_update_error(rc.status, rc.error_message)
             elif key.startswith(GatewayState.SUBSYSTEM_NETWORK_ADD_PREFIX):
                 if not is_add_req:
                     req = json_format.Parse(val, pb2.add_subsystem_network_req(),

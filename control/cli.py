@@ -1091,21 +1091,26 @@ class GatewayClient:
                 self.cli.parser.error("Port value must be smaller than 65536")
         if args.secure_listeners and not args.network_mask:
             self.cli.parser.error("Secure listeners cannot be set without a network mask")
+        if args.network_mask and args.use_default_gw_group_network_mask:
+            self.cli.parser.error("--network-mask and --use-default-gw-group-network-mask "
+                                  "can't be used together")
 
         model_check = GatewayUtils.is_valid_model_name(args.model_name)
         if model_check:
             self.cli.parser.error(f"Invalid model name: {model_check}")
 
-        req = pb2.create_subsystem_req(subsystem_nqn=args.subsystem,
-                                       serial_number=args.serial_number,
-                                       max_namespaces=args.max_namespaces,
-                                       enable_ha=True,
-                                       no_group_append=args.no_group_append,
-                                       dhchap_key=args.dhchap_key,
-                                       network_mask=args.network_mask,
-                                       port=args.port,
-                                       secure_listeners=args.secure_listeners,
-                                       model_name=args.model_name)
+        req = pb2.create_subsystem_req(
+            subsystem_nqn=args.subsystem,
+            serial_number=args.serial_number,
+            max_namespaces=args.max_namespaces,
+            enable_ha=True,
+            no_group_append=args.no_group_append,
+            dhchap_key=args.dhchap_key,
+            network_mask=args.network_mask,
+            use_default_gw_group_network_mask=args.use_default_gw_group_network_mask,
+            port=args.port,
+            secure_listeners=args.secure_listeners,
+            model_name=args.model_name)
         try:
             ret = self.stub.create_subsystem(req)
         except Exception as ex:
@@ -1223,6 +1228,8 @@ class GatewayClient:
                     has_dhchap = "Yes" if s.has_dhchap_key else "No"
                     allow_any = "Yes" if s.allow_any_host else "No"
                     net_mask = '\n'.join(s.network_mask) if s.network_mask else ""
+                    if s.use_default_gw_group_network_mask:
+                        net_mask += " (default)"
                     one_subsys = [s.subtype,
                                   s.nqn,
                                   s.serial_number,
@@ -1379,6 +1386,51 @@ class GatewayClient:
             if ret.status == 0:
                 out_func(f"Deleting network mask {args.network_mask} from subsystem "
                          f"{args.subsystem}: Successful")
+                if ret.error_message:
+                    wrn_func(ret.error_message)
+            else:
+                err_func(ret.error_message)
+        elif args.format == "json" or args.format == "yaml":
+            ret_str = json_format.MessageToJson(ret, indent=4,
+                                                including_default_value_fields=True,
+                                                preserving_proto_field_name=True)
+            if args.format == "json":
+                out_func(ret_str)
+            elif args.format == "yaml":
+                obj = json.loads(ret_str)
+                out_func(yaml.dump(obj))
+        elif args.format == "python":
+            return ret
+        else:
+            assert False
+
+        return ret.status
+
+    def subsystem_set_use_default_gw_group_network_mask(self, args):
+        """Enable or disable using the gateway group's default network mask on a subsystem"""
+
+        out_func, err_func, wrn_func = self.get_output_functions(args)
+
+        use_default = GatewayClient.parse_boolean(args.use_default_gw_group_network_mask)
+        req = pb2.subsystem_set_use_default_network_mask_req(
+            subsystem_nqn=args.subsystem,
+            use_default_gw_group_network_mask=use_default)
+        try:
+            ret = self.stub.subsystem_set_use_default_gw_group_network_mask(req)
+        except Exception as ex:
+            errmsg = f"Failure setting use_default_gw_group_network_mask for subsystem " \
+                     f"{args.subsystem}"
+            ret = pb2.gw_refresh_network_status(status=errno.EINVAL,
+                                                error_message=f"{errmsg}:\n{ex}")
+
+        if args.format == "text" or args.format == "plain":
+            if ret.status == 0:
+                out_func(f"Setting use_default_gw_group_network_mask to {use_default} for "
+                         f"subsystem {args.subsystem}: Successful")
+                if ret.added:
+                    out_func(f"Added: {', '.join(ret.added)}")
+                if ret.removed:
+                    out_func(f"Removed: {', '.join(ret.removed)}")
                 if ret.error_message:
                     wrn_func(ret.error_message)
             else:
@@ -1593,6 +1645,11 @@ class GatewayClient:
                  help="For this subnet, automatically create listeners for this subsystem",
                  nargs='+',
                  required=False),
+        argument("--use-default-gw-group-network-mask",
+                 help="Automatically create listeners for this subsystem using the gateway "
+                      "group's default network mask",
+                 action='store_true',
+                 required=False),
         argument("--port",
                  "-p",
                  help="Port to use for the created listeners",
@@ -1662,6 +1719,17 @@ class GatewayClient:
                  required=True),
         argument("--network-mask",
                  help="New network mask to add",
+                 required=True),
+    ]
+    subsys_set_use_default_gw_group_network_mask_args = [
+        argument("--subsystem",
+                 "-n",
+                 help="Subsystem NQN",
+                 required=True),
+        argument("--use-default-gw-group-network-mask",
+                 help="Enable or disable using the gateway group's default network mask",
+                 type=str.lower,
+                 choices=["yes", "no", "true", "false", "1", "0"],
                  required=True),
     ]
     subsys_del_kmip_server_endpoint_args = [
@@ -1738,6 +1806,10 @@ class GatewayClient:
     subsystem_actions.append({"name": "del_network",
                               "args": subsys_del_network_args,
                               "help": "Delete a network mask in the subsystem"})
+    subsystem_actions.append({"name": "set_use_default_gw_group_network_mask",
+                              "args": subsys_set_use_default_gw_group_network_mask_args,
+                              "help": "Enable or disable using the gateway group's "
+                                      "default network mask"})
     subsystem_actions.append({"name": "add_kmip_server_endpoint",
                               "args": subsys_add_kmip_server_endpoint_args,
                               "help": "Add a KMIP server endpoint to the subsystem"})
@@ -1767,6 +1839,8 @@ class GatewayClient:
             return self.subsystem_add_network_mask(args)
         elif args.action == "del_network":
             return self.subsystem_del_network_mask(args)
+        elif args.action == "set_use_default_gw_group_network_mask":
+            return self.subsystem_set_use_default_gw_group_network_mask(args)
         elif args.action == "add_kmip_server_endpoint":
             return self.subsystem_add_kmip_server_endpoint(args)
         elif args.action == "del_kmip_server_endpoint":

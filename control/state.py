@@ -38,6 +38,7 @@ class GatewayState(ABC):
     SUBSYSTEM_NETWORK_ADD_PREFIX = "net-add-subsystem" + OMAP_KEY_DELIMITER
     SUBSYSTEM_NETWORK_DEL_PREFIX = "net-del-subsystem" + OMAP_KEY_DELIMITER
     SUBSYSTEM_KEY_PREFIX = "key-subsystem" + OMAP_KEY_DELIMITER
+    SUBSYSTEM_DEFAULT_NETWORK_MASK_PREFIX = "default-network-mask-subsystem" + OMAP_KEY_DELIMITER
     HOST_PREFIX = "host" + OMAP_KEY_DELIMITER
     CONNECTED_HOST_PREFIX = "connected-del-host" + OMAP_KEY_DELIMITER
     HOST_KEY_PREFIX = "key-host" + OMAP_KEY_DELIMITER
@@ -170,6 +171,9 @@ class GatewayState(ABC):
 
     def build_subsystem_key_key(subsystem_nqn: str) -> str:
         return GatewayState.SUBSYSTEM_KEY_PREFIX + subsystem_nqn
+
+    def build_subsystem_default_network_mask_key(subsystem_nqn: str) -> str:
+        return GatewayState.SUBSYSTEM_DEFAULT_NETWORK_MASK_PREFIX + subsystem_nqn
 
     def build_subsystem_network_mask_key(subsystem_nqn: str) -> str:
         return GatewayState.SUBSYSTEM_NETWORK_MASK + subsystem_nqn
@@ -1700,6 +1704,38 @@ class GatewayStateHandler:
             return (False, None, False)
         return (True, new_req.dhchap_key, new_req.key_encrypted)
 
+    def subsystem_only_default_network_mask_changed(self, old_val, new_val):
+        # If only the use_default_gw_group_network_mask field has changed we can use
+        # subsystem_set_use_default_gw_group_network_mask request instead of re-adding
+        # the subsystem
+        old_req = None
+        new_req = None
+        try:
+            old_req = json_format.Parse(old_val,
+                                        pb2.create_subsystem_req(),
+                                        ignore_unknown_fields=True)
+        except json_format.ParseError:
+            self.logger.exception(f"Got exception parsing {old_val}")
+            return (False, None)
+        try:
+            new_req = json_format.Parse(new_val,
+                                        pb2.create_subsystem_req(),
+                                        ignore_unknown_fields=True)
+        except json_format.ParseError:
+            self.logger.exception(f"Got exception parsing {new_val}")
+            return (False, None)
+        if not old_req or not new_req:
+            self.logger.debug(f"Failed to parse requests, old: {old_val} -> {old_req}, "
+                              f"new: {new_val} -> {new_req}")
+            return (False, None)
+        assert old_req != new_req, f"Something was wrong we shouldn't get identical old " \
+                                   f"and new values ({old_req})"
+        old_req.use_default_gw_group_network_mask = new_req.use_default_gw_group_network_mask
+        if old_req != new_req:
+            # Something besides the flag is different
+            return (False, None)
+        return (True, new_req.use_default_gw_group_network_mask)
+
     def subsystem_only_network_mask_changed(self, old_val, new_val):
         # If only the network_mask key field has changed we can use
         # add/del_subsystem_network request instead of re-adding the subsystem
@@ -1899,6 +1935,7 @@ class GatewayStateHandler:
                 only_host_key_changed = []
                 only_subsystem_key_changed = []
                 only_subsystem_network_changed = []
+                only_subsystem_default_network_mask_changed = []
                 auto_listener_add = []
                 for key in list(changed.keys()):
                     if key.startswith(GatewayState.NAMESPACE_PREFIX):
@@ -1984,10 +2021,20 @@ class GatewayStateHandler:
                         if should_process:
                             self.logger.debug(f"Found {key} where only the network has changed.")
                             only_subsystem_network_changed.append((key, add_n, del_n))
+                        (should_process,
+                         new_use_default) = self.subsystem_only_default_network_mask_changed(
+                            local_state_dict[key],
+                            omap_state_dict[key])
+                        if should_process:
+                            self.logger.debug(f"Found {key} where only "
+                                              f"use_default_gw_group_network_mask has changed. "
+                                              f"The new value is {new_use_default}")
+                            only_subsystem_default_network_mask_changed.append(
+                                (key, new_use_default))
                 for key in added.keys():
                     if key.startswith(GatewayState.SUBSYSTEM_PREFIX):
                         subsystem = self._parse_subsystem_req(omap_state_dict[key])
-                        if subsystem.network_mask:
+                        if subsystem.network_mask or subsystem.use_default_gw_group_network_mask:
                             auto_listener_add.append(subsystem)
 
                 for ns_key, new_lb_grp in ns_lb_group_changed:
@@ -2181,6 +2228,28 @@ class GatewayStateHandler:
                         except Exception:
                             self.logger.exception("Exception formatting change subsystem "
                                                   "key request")
+                for subsys_key, new_use_default in only_subsystem_default_network_mask_changed:
+                    subsys_nqn = None
+                    try:
+                        changed.pop(subsys_key)
+                        subsys_nqn = self.break_subsystem_key(subsys_key)
+                    except Exception:
+                        self.logger.exception(f"Exception removing {subsys_key} from {changed}")
+                    if subsys_nqn:
+                        try:
+                            default_mask_key = \
+                                GatewayState.build_subsystem_default_network_mask_key(subsys_nqn)
+                            req = pb2.subsystem_set_use_default_network_mask_req(
+                                subsystem_nqn=subsys_nqn,
+                                use_default_gw_group_network_mask=new_use_default)
+                            json_req = json_format.MessageToJson(
+                                req,
+                                preserving_proto_field_name=True,
+                                including_default_value_fields=True)
+                            added[default_mask_key] = json_req
+                        except Exception:
+                            self.logger.exception("Exception formatting subsystem default "
+                                                  "network mask request")
                 for subsys_key, add_n, delete_n in only_subsystem_network_changed:
                     subsys_nqn = None
                     try:
@@ -2223,11 +2292,14 @@ class GatewayStateHandler:
                    len(only_subsystem_key_changed) > 0 or len(ns_visibility_changed) > 0 or \
                    len(ns_location_changed) > 0 or len(ns_trash_image_changed) > 0 or \
                    len(ns_auto_resize_changed) > 0 or len(auto_listener_add) > 0 or \
-                   len(only_subsystem_network_changed) > 0:
+                   len(only_subsystem_network_changed) > 0 or \
+                   len(only_subsystem_default_network_mask_changed) > 0:
                     grouped_changed = self._group_by_prefix(changed, prefix_list)
 
                     if len(only_subsystem_key_changed) > 0:
                         prefix_list += [GatewayState.SUBSYSTEM_KEY_PREFIX]
+                    if len(only_subsystem_default_network_mask_changed) > 0:
+                        prefix_list += [GatewayState.SUBSYSTEM_DEFAULT_NETWORK_MASK_PREFIX]
                     if len(ns_lb_group_changed) > 0:
                         prefix_list += [GatewayState.NAMESPACE_LB_GROUP_PREFIX]
                     if len(ns_location_changed) > 0:
