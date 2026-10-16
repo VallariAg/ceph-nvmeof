@@ -2958,6 +2958,12 @@ class GatewayService(pb2_grpc.GatewayServicer):
 
             try:
                 if use_conf:
+                    if not self.listener_network_masks:
+                        final_err_msg = f"Enabled group config network masks for " \
+                                        f"subsystem {request.subsystem_nqn}, but no " \
+                                        f"valid 'listener_network_masks' is set; no " \
+                                        f"listeners created"
+                        self.logger.warning(final_err_msg)
                     nics = NICS(self.logger, True)
                     subnet_ips = set()
                     for subnet in self.listener_network_masks:
