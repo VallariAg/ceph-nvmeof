@@ -1,0 +1,270 @@
+---
+# yamllint disable rule:line-length
+#
+# Run a teuthology suite locally (in nested rootless podman containers) using
+# ceph-devstack: https://github.com/ceph/ceph-devstack
+#
+# ceph-devstack brings up a full, containerized teuthology lab (paddles,
+# pulpito, beanstalk, a teuthology container and N "testnode" containers) and
+# schedules a run against it. The teuthology container's entrypoint
+# (teuthology/containers/teuthology-dev/teuthology.sh) turns the TEUTHOLOGY_*
+# environment variables below into a `teuthology-suite` invocation. It already
+# supplies:  `-v -m <machine_type> --newest 100 --ceph <branch> --ceph-repo
+# <repo> --suite <suite> --suite-branch <branch> --suite-repo <repo>
+# --filter-out libcephfs,kclient --force-priority --seed 349` and then appends
+# TEUTHOLOGY_SUITE_EXTRA_ARGS.
+#
+# The defaults below reproduce:
+#   teuthology-suite -vv -s nvmeof -c main --newest 100 \
+#     --ceph-repo https://github.com/ceph/ceph.git \
+#     --suite-repo https://github.com/vallariag/ceph.git \
+#     --suite-branch fix-82953 \
+#     -p 50 \
+#     --filter gateway-initiator-setup/16-subsys-4-namespace --filter 1
+#
+# NOTE ON RESOURCES: the nvmeof/thrash `gateway-initiator-setup` tests use the
+# `4-gateways-1-initiator` cluster, which needs 5 testnodes each running a full
+# cephadm-deployed Ceph cluster. That is very heavy for a standard GitHub-hosted
+# runner (4 vCPU / 16 GB RAM) and may OOM or time out. This workflow is wired to
+# run on `ubuntu-latest`; for real suite runs, point `runs-on` at a large
+# self-hosted runner.
+#
+# TESTNODE OS: the nvmeof suite pins os_type=rocky, os_version="10", and because
+# `testnode` machines are not reimageable, the dispatcher can only lock nodes
+# that already registered as rocky/10. The published teuthology-testnode image
+# is CentOS Stream 9, so the (temporary) build-testnode-image job below builds a
+# Rocky 10 variant and pushes it to quay; ceph-devstack is then configured to
+# use it. Remove that job once the image is published.
+name: Teuthology (nvmeof) via ceph-devstack
+
+on:  # yamllint disable rule:truthy
+  # TODO: restrict this to the ceph/ceph-nvmeof repo (and probably specific
+  # branches) before merging, e.g. guard the job with
+  # `if: github.repository == 'ceph/ceph-nvmeof'` and narrow `push.branches`.
+  # For now it runs on every push to any branch of any repo/fork for testing.
+  push:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "teuthology suite (-s)"
+        required: true
+        default: "nvmeof"
+      ceph_branch:
+        description: "Ceph branch (-c / --ceph)"
+        required: true
+        default: "main"
+      ceph_repo:
+        description: "Ceph repo (--ceph-repo)"
+        required: true
+        default: "https://github.com/ceph/ceph.git"
+      suite_repo:
+        description: "Suite repo (--suite-repo)"
+        required: true
+        default: "https://github.com/vallariag/ceph.git"
+      suite_branch:
+        description: "Suite branch (--suite-branch)"
+        required: true
+        default: "fix-82953"
+      extra_args:
+        description: "Extra args appended to teuthology-suite (filters, priority, etc.)"
+        required: true
+        # NOTE: do not add -v/-vv here; the entrypoint already passes -v and
+        # teuthology-suite treats `[-v | -vv]` as mutually exclusive.
+        default: "-p 50 --filter gateway-initiator-setup/16-subsys-4-namespace --limit 1"
+      testnode_count:
+        description: "Number of testnode containers (5 for 4-gateways-1-initiator)"
+        required: true
+        default: "5"
+      loop_device_count:
+        description: "Loop devices per testnode (>= max OSDs/node)"
+        required: true
+        default: "3"
+      ceph_devstack_repo:
+        description: "ceph-devstack repo to run from"
+        required: true
+        default: "ceph/ceph-devstack"
+      ceph_devstack_ref:
+        description: "ceph-devstack ref/branch"
+        required: true
+        default: "main"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # TEMPORARY bootstrap job: the nvmeof suite requires Rocky 10 testnodes, but
+  # the published teuthology-testnode image is CentOS Stream 9, so the dispatcher
+  # can never lock nodes (os_type/os_version mismatch). This builds a Rocky 10
+  # variant and pushes it to quay. It runs on a native amd64 runner, which
+  # avoids the x86-64-v3 glibc error you hit QEMU-emulating a Rocky 10 amd64
+  # build on arm64. Once the image is published, delete this job (and the
+  # `needs: build-testnode-image` on the teuthology job).
+  build-testnode-image:
+    name: Build & push Rocky 10 testnode image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout teuthology-testnode
+        uses: actions/checkout@v6
+        with:
+          repository: VallariAg/teuthology-testnode
+          ref: rocky10-testnode
+
+      - name: Log in to registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.3.0
+        with:
+          registry: quay.io
+          username: ${{ vars.CONTAINER_REGISTRY_USERNAME }}
+          password: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
+
+      - name: Build and push testnode image
+        run: |
+          docker build -t quay.io/vallari/teuthology-testnode:rocky10 .
+          docker push quay.io/vallari/teuthology-testnode:rocky10
+
+  teuthology:
+    name: Run ${{ inputs.suite || 'nvmeof' }} suite
+    needs: build-testnode-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 600
+    env:
+      # Consumed by the teuthology container's entrypoint (see header comment).
+      # `inputs.*` is only populated for workflow_dispatch; on `push` events it
+      # is empty, so each value falls back to the same default as the input.
+      TEUTHOLOGY_SUITE: ${{ inputs.suite || 'nvmeof' }}
+      TEUTHOLOGY_CEPH_BRANCH: ${{ inputs.ceph_branch || 'main' }}
+      TEUTHOLOGY_CEPH_REPO: ${{ inputs.ceph_repo || 'https://github.com/ceph/ceph.git' }}
+      TEUTHOLOGY_SUITE_REPO: ${{ inputs.suite_repo || 'https://github.com/vallariag/ceph.git' }}
+      TEUTHOLOGY_SUITE_BRANCH: ${{ inputs.suite_branch || 'fix-82953' }}
+      TEUTHOLOGY_SUITE_EXTRA_ARGS: ${{ inputs.extra_args || '-p 50 --filter gateway-initiator-setup/16-subsys-4-namespace --limit 1' }}
+    steps:
+      - name: Checkout ceph-devstack
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.ceph_devstack_repo || 'ceph/ceph-devstack' }}
+          ref: ${{ inputs.ceph_devstack_ref || 'main' }}
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman golang-github-containernetworking-plugin-dnsname sqlite3 jq
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Set owner for /dev/loop-control
+        run: sudo chown "$(whoami)" /dev/loop-control
+
+      - name: Free loop devices used by snap
+        # ceph-devstack claims loop devices by fixed minor number starting at
+        # /dev/loop0. On GitHub-hosted runners snapd mounts snaps on the
+        # low-numbered loop devices, so `losetup /dev/loop0` fails with
+        # "Device or resource busy". Stop snapd, unmount its squashfs mounts,
+        # and detach all loop devices before ceph-devstack creates its own.
+        run: |
+          sudo systemctl stop snapd.service snapd.socket 2>/dev/null || true
+          for m in $(awk '$2 ~ "^/snap/" {print $2}' /proc/mounts | sort -r); do
+            sudo umount -l "$m" 2>/dev/null || true
+          done
+          sudo losetup -D 2>/dev/null || true
+          echo "Remaining loop devices:"
+          losetup -a || true
+
+      - name: Configure ceph-devstack
+        run: |
+          # Paddles uses its bundled sqlite backend when postgres is disabled;
+          # this keeps the container footprint smaller on hosted runners.
+          uv run ceph-devstack config set containers.postgres.count 0
+          uv run ceph-devstack config set containers.testnode.count ${{ inputs.testnode_count || '5' }}
+          uv run ceph-devstack config set containers.testnode.loop_device_count ${{ inputs.loop_device_count || '3' }}
+          # Use the Rocky 10 testnode image built by the build-testnode-image job.
+          uv run ceph-devstack config set containers.testnode.image quay.io/vallari/teuthology-testnode:rocky10
+          uv run ceph-devstack config dump
+
+      - name: Doctor
+        run: uv run ceph-devstack -v doctor --fix
+
+      - name: Pull images
+        run: uv run ceph-devstack -v pull
+
+      - name: Create
+        run: uv run ceph-devstack -v create
+
+      - name: Start
+        run: uv run ceph-devstack -v start
+
+      - name: Check status
+        run: podman ps -a
+
+      - name: Wait for testnodes to register with paddles
+        # The teuthology dispatcher can only lock nodes that the testnode
+        # containers have registered into paddles. `0 nodes available` means
+        # registration hasn't happened yet (or failed), so give it time and
+        # surface diagnostics if the nodes never show up.
+        run: |
+          want=${{ inputs.testnode_count || '5' }}
+          # paddles lists nodes at /nodes/ filtered by query params (NOT
+          # /nodes/<machine_type>/, which looks up a node *named* that).
+          url="http://paddles:8080/nodes/?machine_type=testnode"
+          for i in $(seq 1 30); do
+            nodes=$(podman exec teuthology curl -sf "$url" || echo '[]')
+            count=$(echo "$nodes" | jq 'length' 2>/dev/null || echo 0)
+            echo "Attempt $i: $count/$want testnode(s) registered"
+            if [ "${count:-0}" -ge "$want" ]; then
+              echo "$nodes" | jq -r '.[] | "\(.name) up=\(.up) locked=\(.locked) os=\(.os_type)/\(.os_version)"'
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::testnodes did not register with paddles"
+          echo "=== raw /nodes/ response ==="
+          podman exec teuthology curl -s "$url" || true
+          podman ps -a
+
+      - name: Follow teuthology logs
+        # `podman logs -f` streams the dispatcher's output live into the Actions
+        # UI and returns once the container exits; then propagate its exit code
+        # so a failed suite fails this step.
+        run: |
+          podman logs -f teuthology
+          exit "$(podman inspect -f '{{.State.ExitCode}}' teuthology)"
+
+      - name: Dump job log
+        if: success() || failure()
+        run: uv run ceph-devstack logs || true
+
+      - name: Collect job data
+        if: success() || failure()
+        run: |
+          mkdir -p /tmp/artifacts
+          podman cp paddles:/paddles/dev.db /tmp/dev.db || true
+          if [ -f /tmp/dev.db ]; then
+            sqlite3 /tmp/dev.db ".output stdout" ".mode json" "select * from jobs" \
+              | jq | tee /tmp/artifacts/jobs.json
+          fi
+
+      - name: Create tarball of log archive
+        if: success() || failure()
+        run: |
+          mkdir -p /tmp/artifacts
+          # Tar from inside the archive dir so the run directory
+          # (root-<timestamp>-...-testnode/) sits at the top of the tarball,
+          # instead of being nested under .local/share/ceph-devstack/archive/.
+          tar -czf /tmp/artifacts/archive.tar.gz \
+            -C ~/.local/share/ceph-devstack/archive . || true
+
+      - name: Upload artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: teuthology-${{ inputs.suite }}-${{ github.run_id }}
+          path: /tmp/artifacts/
+          if-no-files-found: ignore
+
+      - name: Stop
+        if: always()
+        run: uv run ceph-devstack -v stop || true
+
+      - name: Remove
+        if: always()
+        run: uv run ceph-devstack -v remove || true
