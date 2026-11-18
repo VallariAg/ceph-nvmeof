@@ -147,13 +147,24 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y podman golang-github-containernetworking-plugin-dnsname sqlite3 jq
+          # dnsname is for the CNI backend; aardvark-dns/netavark provide DNS for
+          # the netavark backend, which rootful podman uses by default. Container
+          # name resolution on the ceph-devstack network (teuthology -> testnode)
+          # needs whichever backend's DNS helper is present.
+          sudo apt-get install -y podman \
+            golang-github-containernetworking-plugin-dnsname \
+            aardvark-dns netavark \
+            sqlite3 jq
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
 
-      - name: Set owner for /dev/loop-control
-        run: sudo chown "$(whoami)" /dev/loop-control
+      - name: Install ceph-devstack into a venv
+        # ceph-devstack is run ROOTFUL below (sudo) so that cephadm's ceph-volume
+        # can chown OSD loop devices (rootless user namespaces forbid that). We
+        # install into .venv and then invoke sudo .venv/bin/ceph-devstack, which
+        # avoids depending on uv being on root's PATH.
+        run: uv sync
 
       - name: Free loop devices used by snap
         # ceph-devstack claims loop devices by fixed minor number starting at
@@ -172,29 +183,58 @@ jobs:
 
       - name: Configure ceph-devstack
         run: |
+          # Rootful: use an explicit, HOME-independent data_dir so the archive
+          # path is deterministic (root's HOME is /root under sudo).
+          sudo .venv/bin/ceph-devstack config set data_dir /var/lib/ceph-devstack
           # Paddles uses its bundled sqlite backend when postgres is disabled;
           # this keeps the container footprint smaller on hosted runners.
-          uv run ceph-devstack config set containers.postgres.count 0
-          uv run ceph-devstack config set containers.testnode.count ${{ inputs.testnode_count || '5' }}
-          uv run ceph-devstack config set containers.testnode.loop_device_count ${{ inputs.loop_device_count || '3' }}
+          sudo .venv/bin/ceph-devstack config set containers.postgres.count 0
+          sudo .venv/bin/ceph-devstack config set containers.testnode.count ${{ inputs.testnode_count || '5' }}
+          sudo .venv/bin/ceph-devstack config set containers.testnode.loop_device_count ${{ inputs.loop_device_count || '3' }}
           # Use the Rocky 10 testnode image built by the build-testnode-image job.
-          uv run ceph-devstack config set containers.testnode.image quay.io/vallari/teuthology-testnode:rocky10
-          uv run ceph-devstack config dump
+          sudo .venv/bin/ceph-devstack config set containers.testnode.image quay.io/vallari/teuthology-testnode:rocky10
+          sudo .venv/bin/ceph-devstack config dump
 
       - name: Doctor
-        run: uv run ceph-devstack -v doctor --fix
+        run: sudo .venv/bin/ceph-devstack -v doctor --fix
 
       - name: Pull images
-        run: uv run ceph-devstack -v pull
+        run: sudo .venv/bin/ceph-devstack -v pull
 
       - name: Create
-        run: uv run ceph-devstack -v create
+        # The teuthology container bakes in the TEUTHOLOGY_* env at create time,
+        # so forward them through sudo (which otherwise resets the environment).
+        run: |
+          sudo --preserve-env=TEUTHOLOGY_SUITE,TEUTHOLOGY_CEPH_BRANCH,TEUTHOLOGY_CEPH_REPO,TEUTHOLOGY_SUITE_REPO,TEUTHOLOGY_SUITE_BRANCH,TEUTHOLOGY_SUITE_EXTRA_ARGS \
+            .venv/bin/ceph-devstack -v create
 
       - name: Start
-        run: uv run ceph-devstack -v start
+        run: sudo .venv/bin/ceph-devstack -v start
 
       - name: Check status
-        run: podman ps -a
+        run: sudo podman ps -a
+
+      - name: Network / DNS diagnostics
+        if: success() || failure()
+        run: |
+          set +e
+          echo "=== network backend ==="
+          sudo podman info --format '{{.Host.NetworkBackend}}'
+          echo "=== aardvark-dns binary ==="
+          which aardvark-dns; ls -l /usr/lib/podman/aardvark-dns /usr/libexec/podman/aardvark-dns 2>/dev/null
+          echo "=== aardvark-dns process ==="
+          sudo pgrep -a aardvark || echo "aardvark-dns NOT running"
+          echo "=== ceph-devstack network ==="
+          sudo podman network inspect ceph-devstack
+          echo "=== teuthology /etc/resolv.conf ==="
+          sudo podman exec teuthology cat /etc/resolv.conf
+          echo "=== testnode_0 name/hostname/ip ==="
+          sudo podman inspect -f 'name={{.Name}} hostname={{.Config.Hostname}}' testnode_0
+          sudo podman inspect -f 'ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' testnode_0
+          echo "=== resolve testnode_0 from teuthology, by name then hostname ==="
+          sudo podman exec teuthology getent hosts testnode_0 || echo "  name testnode_0 NOT resolvable"
+          hn=$(sudo podman inspect -f '{{.Config.Hostname}}' testnode_0)
+          sudo podman exec teuthology getent hosts "$hn" || echo "  hostname $hn NOT resolvable"
 
       - name: Wait for testnodes to register with paddles
         # The teuthology dispatcher can only lock nodes that the testnode
@@ -207,7 +247,7 @@ jobs:
           # /nodes/<machine_type>/, which looks up a node *named* that).
           url="http://paddles:8080/nodes/?machine_type=testnode"
           for i in $(seq 1 30); do
-            nodes=$(podman exec teuthology curl -sf "$url" || echo '[]')
+            nodes=$(sudo podman exec teuthology curl -sf "$url" || echo '[]')
             count=$(echo "$nodes" | jq 'length' 2>/dev/null || echo 0)
             echo "Attempt $i: $count/$want testnode(s) registered"
             if [ "${count:-0}" -ge "$want" ]; then
@@ -218,28 +258,49 @@ jobs:
           done
           echo "::warning::testnodes did not register with paddles"
           echo "=== raw /nodes/ response ==="
-          podman exec teuthology curl -s "$url" || true
-          podman ps -a
+          sudo podman exec teuthology curl -s "$url" || true
+          sudo podman ps -a
 
       - name: Follow teuthology logs
-        # `podman logs -f` streams the dispatcher's output live into the Actions
-        # UI and returns once the container exits; then propagate its exit code
-        # so a failed suite fails this step.
+        # Stream both the dispatcher output (podman logs) AND the per-job
+        # teuthology.log(s), which are written to the archive and never appear on
+        # the container's stdout. Job log paths aren't known until the job
+        # starts, so discover and `tail -F` them as they appear. Runs until the
+        # teuthology container exits, then propagates its exit code so a failed
+        # suite fails this step.
         run: |
-          podman logs -f teuthology
-          exit "$(podman inspect -f '{{.State.ExitCode}}' teuthology)"
+          set +e
+          archive="/var/lib/ceph-devstack/archive"
+          # Dispatcher output (job scheduling) in the background.
+          sudo podman logs -f teuthology &
+          declare -A tailed
+          while [ "$(sudo podman inspect -f '{{.State.Status}}' teuthology 2>/dev/null)" = "running" ]; do
+            while IFS= read -r f; do
+              if [ -z "${tailed[$f]:-}" ]; then
+                echo "=== following job log: $f ==="
+                sudo tail -n +1 -F "$f" &
+                tailed[$f]=1
+              fi
+            done < <(sudo find "$archive" -name teuthology.log 2>/dev/null)
+            sleep 5
+          done
+          # Container exited: let final lines flush, stop background followers.
+          sleep 2
+          sudo kill $(jobs -p) 2>/dev/null || true
+          kill $(jobs -p) 2>/dev/null || true
+          exit "$(sudo podman inspect -f '{{.State.ExitCode}}' teuthology 2>/dev/null || echo 1)"
 
       - name: Dump job log
         if: success() || failure()
-        run: uv run ceph-devstack logs || true
+        run: sudo .venv/bin/ceph-devstack logs || true
 
       - name: Collect job data
         if: success() || failure()
         run: |
           mkdir -p /tmp/artifacts
-          podman cp paddles:/paddles/dev.db /tmp/dev.db || true
+          sudo podman cp paddles:/paddles/dev.db /tmp/dev.db || true
           if [ -f /tmp/dev.db ]; then
-            sqlite3 /tmp/dev.db ".output stdout" ".mode json" "select * from jobs" \
+            sudo sqlite3 /tmp/dev.db ".output stdout" ".mode json" "select * from jobs" \
               | jq | tee /tmp/artifacts/jobs.json
           fi
 
@@ -248,10 +309,12 @@ jobs:
         run: |
           mkdir -p /tmp/artifacts
           # Tar from inside the archive dir so the run directory
-          # (root-<timestamp>-...-testnode/) sits at the top of the tarball,
-          # instead of being nested under .local/share/ceph-devstack/archive/.
-          tar -czf /tmp/artifacts/archive.tar.gz \
-            -C ~/.local/share/ceph-devstack/archive . || true
+          # (root-<timestamp>-...-testnode/) sits at the top of the tarball.
+          # Archive is root-owned (rootful), so tar via sudo and then make the
+          # artifacts readable by the runner user for upload.
+          sudo tar -czf /tmp/artifacts/archive.tar.gz \
+            -C /var/lib/ceph-devstack/archive . || true
+          sudo chown -R "$(id -u):$(id -g)" /tmp/artifacts || true
 
       - name: Upload artifacts
         if: success() || failure()
@@ -263,8 +326,8 @@ jobs:
 
       - name: Stop
         if: always()
-        run: uv run ceph-devstack -v stop || true
+        run: sudo .venv/bin/ceph-devstack -v stop || true
 
       - name: Remove
         if: always()
-        run: uv run ceph-devstack -v remove || true
+        run: sudo .venv/bin/ceph-devstack -v remove || true
