@@ -141,8 +141,10 @@ jobs:
       - name: Checkout ceph-devstack
         uses: actions/checkout@v6
         with:
-          repository: ${{ inputs.ceph_devstack_repo || 'ceph/ceph-devstack' }}
-          ref: ${{ inputs.ceph_devstack_ref || 'main' }}
+          # Fork/branch carries the testnode --hostname fix (reliable aardvark
+          # DNS resolution). Revert to ceph/ceph-devstack@main once upstreamed.
+          repository: ${{ inputs.ceph_devstack_repo || 'VallariAg/ceph-devstack' }}
+          ref: ${{ inputs.ceph_devstack_ref || 'testnode-hostname' }}
 
       - name: Install packages
         run: |
@@ -228,13 +230,15 @@ jobs:
           sudo podman network inspect ceph-devstack
           echo "=== teuthology /etc/resolv.conf ==="
           sudo podman exec teuthology cat /etc/resolv.conf
-          echo "=== testnode_0 name/hostname/ip ==="
-          sudo podman inspect -f 'name={{.Name}} hostname={{.Config.Hostname}}' testnode_0
-          sudo podman inspect -f 'ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' testnode_0
-          echo "=== resolve testnode_0 from teuthology, by name then hostname ==="
-          sudo podman exec teuthology getent hosts testnode_0 || echo "  name testnode_0 NOT resolvable"
-          hn=$(sudo podman inspect -f '{{.Config.Hostname}}' testnode_0)
-          sudo podman exec teuthology getent hosts "$hn" || echo "  hostname $hn NOT resolvable"
+          echo "=== all containers (are testnodes running?) ==="
+          sudo podman ps -a --format '{{.Names}}\t{{.Status}}\t{{.Image}}'
+          echo "=== per-testnode status / exit code / logs ==="
+          for tn in $(sudo podman ps -a --format '{{.Names}}' | grep '^testnode_' || true); do
+            echo "--- $tn ---"
+            sudo podman inspect -f 'status={{.State.Status}} exit={{.State.ExitCode}} err={{.State.Error}} hostname={{.Config.Hostname}}' "$tn" || true
+            echo "  logs (tail):"
+            sudo podman logs "$tn" 2>&1 | tail -n 40 || true
+          done
 
       - name: Wait for testnodes to register with paddles
         # The teuthology dispatcher can only lock nodes that the testnode
